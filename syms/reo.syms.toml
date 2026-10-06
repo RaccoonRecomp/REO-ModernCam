@@ -1,0 +1,12 @@
+# Function reference symbols for Resident Evil Outbreak (NTSC-U), SLUS-20765 disc version 2.00.
+# Generated from SLUS_207.65 (sha1 db2b4916e6979b14b202dff529d4b8de85e95a90) on that disc.
+# The executable's symbol table is empty, so no functions are listed. REO_Cheats calls no game
+# functions, so none are needed. Mods that hook game functions need the recompiler's function list.
+# Only the executable's one file-backed load segment is described; its overlay regions have no file data.
+
+[[section]]
+name = "SLUS_207.65"
+rom = 0x00000200
+vram = 0x00100000
+size = 0x159D80
+functions = []

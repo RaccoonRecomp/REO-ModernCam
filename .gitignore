@@ -1,0 +1,11 @@
+*.d
+*.o
+*.elf
+*.nrm
+*.map
+build/
+RecompModTool
+RecompModTool.exe
+__pycache__/
+# Holds addresses and instruction words of your own disc (tools/gen_patches.py): keep it private
+patches.json

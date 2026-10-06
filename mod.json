@@ -1,0 +1,976 @@
+{
+  "id": "reo-modern-camera",
+  "name": "Resident Evil Outbreak — Modern Camera",
+  "version": "2.0.0",
+  "author": "RaccoonRecomp",
+  "authors": [
+    "Snippy (Outbreak ModernCam)"
+  ],
+  "description": "Over-the-shoulder camera for the US release (SLUS-20765 v2.00), ported from Snippy's Outbreak ModernCam (made for the Japanese discs; heysnippy.com). Right-stick and mouse look, Main/Aim/Alt framings, free gun elevation, walking while aiming, crosshair, reload, sprint and shoot buttons, camera collision and room-cut matching.\n\nIt needs the game's mod runtime, the host services of HOST_API.md and the game code built with this mod's patches.json (Build-Game with the feature profile). Ask Snippy before publishing it.",
+  "icon": "icon.png",
+  "game": {
+    "id": "resident-evil-outbreak-file-1",
+    "revisions": [
+      "slus-20765-v2.00"
+    ]
+  },
+  "apiVersion": 1,
+  "settings": [
+    {
+      "key": "enabled",
+      "type": "boolean",
+      "default": true,
+      "label": "Modern Camera",
+      "description": "Over-the-shoulder camera (the exe's Start/Stop). Off hands the camera and everything else back to the game."
+    },
+    {
+      "key": "distance",
+      "type": "number",
+      "default": 300,
+      "min": 100,
+      "max": 600,
+      "label": "Distance",
+      "description": "How far behind her the camera sits."
+    },
+    {
+      "key": "shoulder",
+      "type": "number",
+      "default": 50,
+      "min": -150,
+      "max": 150,
+      "label": "Left / Right",
+      "description": "Sideways offset. Positive = over her right shoulder, negative = left. Swap Shoulder writes the new side here."
+    },
+    {
+      "key": "height",
+      "type": "number",
+      "default": 130,
+      "min": 50,
+      "max": 250,
+      "label": "Height",
+      "description": "Raises the camera and the point it looks at together, so the view moves up or down without tilting."
+    },
+    {
+      "key": "fov_deg",
+      "type": "number",
+      "default": 60,
+      "min": 0,
+      "max": 90,
+      "label": "Field of View",
+      "description": "Vertical field of view in degrees (the exe: 30-90). 0 keeps each room's own FOV."
+    },
+    {
+      "key": "look_drop",
+      "type": "number",
+      "default": 0,
+      "min": -150,
+      "max": 150,
+      "label": "Look Drop",
+      "description": "How far below its own height the camera looks: a fixed downward framing tilt (the exe keeps it out of its window)."
+    },
+    {
+      "key": "pitch_trim",
+      "type": "number",
+      "default": 0,
+      "min": -45,
+      "max": 45,
+      "label": "Pitch Trim",
+      "description": "Constant up/down tilt added to the camera's orbit pitch."
+    },
+    {
+      "key": "aim_distance_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Aim: Custom Distance",
+      "description": "On: the aim camera (blended in while aiming) uses its own distance below. Off: it follows the main camera's."
+    },
+    {
+      "key": "aim_distance",
+      "type": "number",
+      "default": 300,
+      "min": 100,
+      "max": 600,
+      "label": "Aim: Distance",
+      "description": "How far behind her the camera sits. Applies while Aim: Custom Distance is on."
+    },
+    {
+      "key": "aim_shoulder_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Aim: Custom Left / Right",
+      "description": "On: the aim camera (blended in while aiming) uses its own left / right below. Off: it follows the main camera's."
+    },
+    {
+      "key": "aim_shoulder",
+      "type": "number",
+      "default": 50,
+      "min": -150,
+      "max": 150,
+      "label": "Aim: Left / Right",
+      "description": "Sideways offset, + = her right shoulder. Applies while Aim: Custom Left / Right is on."
+    },
+    {
+      "key": "aim_height_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Aim: Custom Height",
+      "description": "On: the aim camera (blended in while aiming) uses its own height below. Off: it follows the main camera's."
+    },
+    {
+      "key": "aim_height",
+      "type": "number",
+      "default": 130,
+      "min": 50,
+      "max": 250,
+      "label": "Aim: Height",
+      "description": "Lifts the camera and its look point together. Applies while Aim: Custom Height is on."
+    },
+    {
+      "key": "aim_fov_deg_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Aim: Custom Field of View",
+      "description": "On: the aim camera (blended in while aiming) uses its own field of view below. Off: it follows the main camera's."
+    },
+    {
+      "key": "aim_fov_deg",
+      "type": "number",
+      "default": 60,
+      "min": 0,
+      "max": 90,
+      "label": "Aim: Field of View",
+      "description": "Vertical field of view. 0 keeps the room's own FOV. Applies while Aim: Custom Field of View is on."
+    },
+    {
+      "key": "aim_look_drop_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Aim: Custom Look Drop",
+      "description": "On: the aim camera (blended in while aiming) uses its own look drop below. Off: it follows the main camera's."
+    },
+    {
+      "key": "aim_look_drop",
+      "type": "number",
+      "default": 0,
+      "min": -150,
+      "max": 150,
+      "label": "Aim: Look Drop",
+      "description": "How far below its own height the camera looks. Applies while Aim: Custom Look Drop is on."
+    },
+    {
+      "key": "aim_pitch_trim_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Aim: Custom Pitch Trim",
+      "description": "On: the aim camera (blended in while aiming) uses its own pitch trim below. Off: it follows the main camera's."
+    },
+    {
+      "key": "aim_pitch_trim",
+      "type": "number",
+      "default": 0,
+      "min": -45,
+      "max": 45,
+      "label": "Aim: Pitch Trim",
+      "description": "Constant tilt added to the orbit pitch. Applies while Aim: Custom Pitch Trim is on."
+    },
+    {
+      "key": "alt_distance_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Alt: Custom Distance",
+      "description": "On: the Alt View camera uses its own distance below. Off: it follows the main camera's."
+    },
+    {
+      "key": "alt_distance",
+      "type": "number",
+      "default": 300,
+      "min": 100,
+      "max": 600,
+      "label": "Alt: Distance",
+      "description": "How far behind her the camera sits. Applies while Alt: Custom Distance is on."
+    },
+    {
+      "key": "alt_shoulder_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Alt: Custom Left / Right",
+      "description": "On: the Alt View camera uses its own left / right below. Off: it follows the main camera's."
+    },
+    {
+      "key": "alt_shoulder",
+      "type": "number",
+      "default": 50,
+      "min": -150,
+      "max": 150,
+      "label": "Alt: Left / Right",
+      "description": "Sideways offset, + = her right shoulder. Applies while Alt: Custom Left / Right is on."
+    },
+    {
+      "key": "alt_height_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Alt: Custom Height",
+      "description": "On: the Alt View camera uses its own height below. Off: it follows the main camera's."
+    },
+    {
+      "key": "alt_height",
+      "type": "number",
+      "default": 130,
+      "min": 50,
+      "max": 250,
+      "label": "Alt: Height",
+      "description": "Lifts the camera and its look point together. Applies while Alt: Custom Height is on."
+    },
+    {
+      "key": "alt_fov_deg_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Alt: Custom Field of View",
+      "description": "On: the Alt View camera uses its own field of view below. Off: it follows the main camera's."
+    },
+    {
+      "key": "alt_fov_deg",
+      "type": "number",
+      "default": 60,
+      "min": 0,
+      "max": 90,
+      "label": "Alt: Field of View",
+      "description": "Vertical field of view. 0 keeps the room's own FOV. Applies while Alt: Custom Field of View is on."
+    },
+    {
+      "key": "alt_look_drop_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Alt: Custom Look Drop",
+      "description": "On: the Alt View camera uses its own look drop below. Off: it follows the main camera's."
+    },
+    {
+      "key": "alt_look_drop",
+      "type": "number",
+      "default": 0,
+      "min": -150,
+      "max": 150,
+      "label": "Alt: Look Drop",
+      "description": "How far below its own height the camera looks. Applies while Alt: Custom Look Drop is on."
+    },
+    {
+      "key": "alt_pitch_trim_set",
+      "type": "boolean",
+      "default": false,
+      "label": "Alt: Custom Pitch Trim",
+      "description": "On: the Alt View camera uses its own pitch trim below. Off: it follows the main camera's."
+    },
+    {
+      "key": "alt_pitch_trim",
+      "type": "number",
+      "default": 0,
+      "min": -45,
+      "max": 45,
+      "label": "Alt: Pitch Trim",
+      "description": "Constant tilt added to the orbit pitch. Applies while Alt: Custom Pitch Trim is on."
+    },
+    {
+      "key": "rotate_mode",
+      "type": "boolean",
+      "default": false,
+      "label": "Keep Behind Character",
+      "description": "On (the exe's 'follow'): the camera swings back behind her as she moves. Off ('manual', ModernCam's File 1 default): it stays wherever you leave it."
+    },
+    {
+      "key": "follow_strength",
+      "type": "number",
+      "default": 0.12,
+      "min": 0.02,
+      "max": 0.4,
+      "label": "Follow Speed",
+      "description": "How quickly the camera swings behind her (Keep Behind Character on)."
+    },
+    {
+      "key": "free_look_return",
+      "type": "number",
+      "default": 1.2,
+      "min": 0,
+      "max": 4,
+      "label": "Recenter Speed",
+      "description": "Seconds for a look with the right stick or mouse to ease back behind her (Keep Behind Character on). 0 never releases it."
+    },
+    {
+      "key": "stick_speed",
+      "type": "number",
+      "default": 140,
+      "min": 40,
+      "max": 300,
+      "label": "Sensitivity (gamepad)",
+      "description": "Turn speed in degrees per second at full right-stick push."
+    },
+    {
+      "key": "mouse_sensitivity",
+      "type": "number",
+      "default": 0.15,
+      "min": 0.02,
+      "max": 0.6,
+      "label": "Sensitivity (keyboard & mouse)",
+      "description": "Degrees per mouse count x 0.4, as the exe. Raw mouse motion, no acceleration."
+    },
+    {
+      "key": "invert_pitch",
+      "type": "boolean",
+      "default": false,
+      "label": "Invert Up/Down"
+    },
+    {
+      "key": "aim_pitch_lock",
+      "type": "boolean",
+      "default": true,
+      "label": "Lock Look to the Gun",
+      "description": "While aiming, stop the camera tilting further than the gun can follow."
+    },
+    {
+      "key": "aim_sensitivity",
+      "type": "number",
+      "default": 0.55,
+      "min": 0.1,
+      "max": 1.5,
+      "label": "Aim Sensitivity",
+      "description": "Look speed multiplier while aiming."
+    },
+    {
+      "key": "gun_pitch_max",
+      "type": "number",
+      "default": 45,
+      "min": 5,
+      "max": 45,
+      "label": "Gun Elevation",
+      "description": "How far up and down the gun can point, in degrees."
+    },
+    {
+      "key": "crosshair",
+      "type": "boolean",
+      "default": true,
+      "label": "Crosshair",
+      "description": "Show a crosshair while aiming (drawn by REO over the game picture)."
+    },
+    {
+      "key": "crosshair_style",
+      "type": "choice",
+      "default": "Dot",
+      "choices": [
+        "Dot",
+        "Cross"
+      ],
+      "label": "Crosshair Shape"
+    },
+    {
+      "key": "crosshair_size",
+      "type": "integer",
+      "default": 3,
+      "min": 1,
+      "max": 16,
+      "label": "Crosshair Size",
+      "description": "Pixels: the dot's radius or the cross's arm length."
+    },
+    {
+      "key": "crosshair_gap",
+      "type": "integer",
+      "default": 3,
+      "min": 0,
+      "max": 16,
+      "label": "Crosshair Gap",
+      "description": "Pixels between the centre and each arm (Cross only)."
+    },
+    {
+      "key": "crosshair_thickness",
+      "type": "integer",
+      "default": 2,
+      "min": 1,
+      "max": 6,
+      "label": "Crosshair Thickness",
+      "description": "Pixels (Cross only)."
+    },
+    {
+      "key": "input_device",
+      "type": "string",
+      "default": "auto",
+      "maxLength": 16,
+      "label": "Steered By",
+      "description": "auto (Gamepad: the most active pad), kbm (Keyboard & Mouse) or pad:N (that pad). The camera's own input; the game keeps REO's controls."
+    },
+    {
+      "key": "aim_button",
+      "type": "string",
+      "default": "trig:L",
+      "maxLength": 32,
+      "label": "Aim",
+      "description": "Hold to aim (ModernCam's File 1 bind: left trigger). With Modern Aim the camera holds R1, the game's aim, for her. On Keyboard & Mouse a pad or trigger bind is the right mouse button."
+    },
+    {
+      "key": "shoot_button",
+      "type": "string",
+      "default": "trig:R",
+      "maxLength": 32,
+      "label": "Shoot",
+      "description": "Fires with whichever button fires under your control type (File 1 bind: right trigger)."
+    },
+    {
+      "key": "reload_button",
+      "type": "string",
+      "default": "pad:0x4000",
+      "maxLength": 32,
+      "label": "Reload",
+      "description": "Reloads the equipped weapon from carried ammo with the game's own reload animation (File 1 bind: X / Square)."
+    },
+    {
+      "key": "sprint_button",
+      "type": "string",
+      "default": "pad:0x0040",
+      "maxLength": 32,
+      "label": "Sprint (toggle)",
+      "description": "Sprint without holding the dash button; takes the dash action off its original button (File 1 bind: L3)."
+    },
+    {
+      "key": "capture_button",
+      "type": "string",
+      "default": "key:0x43",
+      "maxLength": 32,
+      "label": "Free Cursor",
+      "description": "Keyboard & Mouse: frees or captures the mouse (C)."
+    },
+    {
+      "key": "recenter_button",
+      "type": "string",
+      "default": "",
+      "maxLength": 32,
+      "label": "Recenter",
+      "description": "Snaps the camera behind her."
+    },
+    {
+      "key": "swap_shoulder_button",
+      "type": "string",
+      "default": "pad:0x0080",
+      "maxLength": 32,
+      "label": "Swap Shoulder",
+      "description": "Moves the camera to her other shoulder and saves the side (File 1 bind: R3)."
+    },
+    {
+      "key": "special_button",
+      "type": "string",
+      "default": "",
+      "maxLength": 32,
+      "label": "Special Action",
+      "description": "While held, presses the dash action's button for the game (the exe's note: for characters whose special move shares the dash button), and keeps the bound button from the game."
+    },
+    {
+      "key": "lens_button",
+      "type": "string",
+      "default": "",
+      "maxLength": 32,
+      "label": "Watch Next Player",
+      "description": "Multiplayer only: the camera follows the next human player while you keep control. Offline there is no one else to watch, so it does nothing (online play is not available)."
+    },
+    {
+      "key": "switch_view_button",
+      "type": "string",
+      "default": "",
+      "maxLength": 32,
+      "label": "Alt View",
+      "description": "Toggles the Alt rig."
+    },
+    {
+      "key": "pitch_speed",
+      "type": "number",
+      "default": 90,
+      "min": 20,
+      "max": 300,
+      "label": "Vertical Sensitivity",
+      "description": "Up/down speed in degrees per second at full right-stick push."
+    },
+    {
+      "key": "invert_stick",
+      "type": "boolean",
+      "default": false,
+      "label": "Invert Left/Right"
+    },
+    {
+      "key": "pitch_min",
+      "type": "number",
+      "default": -35,
+      "min": -89,
+      "max": 0,
+      "label": "Lowest Look Angle"
+    },
+    {
+      "key": "pitch_max",
+      "type": "number",
+      "default": 70,
+      "min": 0,
+      "max": 89,
+      "label": "Highest Look Angle"
+    },
+    {
+      "key": "aim_blend",
+      "type": "number",
+      "default": 0.25,
+      "min": 0.02,
+      "max": 1,
+      "label": "Aim Zoom Speed (fallback)",
+      "description": "Used for zooming in or out when that speed below is 0 (the exe: when it is not set)."
+    },
+    {
+      "key": "aim_blend_in",
+      "type": "number",
+      "default": 0.35,
+      "min": 0,
+      "max": 1,
+      "label": "Aim Zoom In Speed",
+      "description": "0 uses the fallback above."
+    },
+    {
+      "key": "aim_blend_out",
+      "type": "number",
+      "default": 0.15,
+      "min": 0,
+      "max": 1,
+      "label": "Aim Zoom Out Speed",
+      "description": "0 uses the fallback above."
+    },
+    {
+      "key": "aim_follow",
+      "type": "boolean",
+      "default": true,
+      "label": "Follow While Aiming",
+      "description": "Used when Modern Aim is off."
+    },
+    {
+      "key": "aim_follow_strength",
+      "type": "number",
+      "default": 0.3,
+      "min": 0.02,
+      "max": 1,
+      "label": "Follow Speed While Aiming"
+    },
+    {
+      "key": "aim_free_look",
+      "type": "boolean",
+      "default": true,
+      "label": "Free Look While Aiming"
+    },
+    {
+      "key": "aim_snap_behind",
+      "type": "boolean",
+      "default": true,
+      "label": "Snap Behind on Aim",
+      "description": "Pressing aim swings the camera straight behind her (Modern Aim off)."
+    },
+    {
+      "key": "aim_snap_speed",
+      "type": "number",
+      "default": 0.5,
+      "min": 0.1,
+      "max": 1,
+      "label": "Snap Speed"
+    },
+    {
+      "key": "aim_zero_deg",
+      "type": "number",
+      "default": -0.1,
+      "min": -45,
+      "max": 45,
+      "label": "Gun Zero",
+      "description": "Gun elevation when the camera is level."
+    },
+    {
+      "key": "aim_shoulder_min",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 150,
+      "label": "Aim Shoulder Minimum",
+      "description": "Minimum sideways offset while aiming."
+    },
+    {
+      "key": "modern_aim_deadzone",
+      "type": "number",
+      "default": 12,
+      "min": 0,
+      "max": 45,
+      "label": "Aim Turn Deadzone",
+      "description": "While aiming, how many degrees the camera and her facing may differ before she turns."
+    },
+    {
+      "key": "modern_aim",
+      "type": "boolean",
+      "default": true,
+      "label": "Modern Aim",
+      "description": "Aim where the camera looks: she turns with the camera while aiming and the gun follows it."
+    },
+    {
+      "key": "free_aim",
+      "type": "boolean",
+      "default": true,
+      "label": "Free Gun Elevation",
+      "description": "The gun follows the camera up and down instead of snapping to the game's three angles."
+    },
+    {
+      "key": "aim_strafe_speed",
+      "type": "number",
+      "default": 45,
+      "min": 0,
+      "max": 120,
+      "label": "Strafe Speed While Aiming",
+      "description": "File 1 roots her when she aims; the camera moves her with the left stick at this speed. 0 turns it off."
+    },
+    {
+      "key": "turn_to_camera",
+      "type": "choice",
+      "default": "Off",
+      "choices": [
+        "Off",
+        "Moving",
+        "Always"
+      ],
+      "label": "Turn to Camera",
+      "description": "Moving: she faces the direction you push relative to the camera. Always: she always faces where the camera looks."
+    },
+    {
+      "key": "turn_speed",
+      "type": "number",
+      "default": 165,
+      "min": 30,
+      "max": 720,
+      "label": "Turn Speed",
+      "description": "Degrees per second when the camera turns her."
+    },
+    {
+      "key": "turn_deadzone",
+      "type": "number",
+      "default": 10,
+      "min": 1,
+      "max": 45,
+      "label": "Turn Deadzone"
+    },
+    {
+      "key": "own_turn",
+      "type": "boolean",
+      "default": false,
+      "label": "Own Turning",
+      "description": "File 2 only in the exe (its heading freeze); File 1 has none, so this changes nothing - as in the exe."
+    },
+    {
+      "key": "follow_hold",
+      "type": "number",
+      "default": 0.18,
+      "min": 0,
+      "max": 1,
+      "label": "Follow Hold",
+      "description": "Seconds she counts as still moving after her last step (the follow heading)."
+    },
+    {
+      "key": "follow_dir",
+      "type": "choice",
+      "default": "Behind her",
+      "choices": [
+        "Behind her",
+        "In front of her"
+      ],
+      "label": "Camera Side",
+      "description": "Where Keep Behind, snap and recenter put the camera (the exe's follow_dir 1 / -1)."
+    },
+    {
+      "key": "yaw_offset",
+      "type": "number",
+      "default": 0,
+      "min": -180,
+      "max": 180,
+      "label": "Yaw Offset",
+      "description": "Degrees added to the follow and snap direction."
+    },
+    {
+      "key": "shoulder_swap_time",
+      "type": "number",
+      "default": 0.18,
+      "min": 0.02,
+      "max": 1,
+      "label": "Shoulder Swap Speed",
+      "description": "How quickly the camera slides to the other shoulder."
+    },
+    {
+      "key": "recenter_time",
+      "type": "number",
+      "default": 0.25,
+      "min": 0,
+      "max": 2,
+      "label": "Recenter Time",
+      "description": "Seconds the Recenter button eases the camera back."
+    },
+    {
+      "key": "cam_collision",
+      "type": "boolean",
+      "default": true,
+      "label": "Camera Collision",
+      "description": "Pulls the camera in front of walls."
+    },
+    {
+      "key": "cam_margin",
+      "type": "number",
+      "default": 55,
+      "min": 0,
+      "max": 150,
+      "label": "Wall Margin",
+      "description": "How far in front of a wall the camera stops."
+    },
+    {
+      "key": "cam_block_top",
+      "type": "number",
+      "default": 25,
+      "min": 0,
+      "max": 150,
+      "label": "Low Obstacle Height",
+      "description": "Walls whose top is below the look point plus this do not pull the camera in."
+    },
+    {
+      "key": "cam_ignore_props",
+      "type": "boolean",
+      "default": true,
+      "label": "Ignore Props",
+      "description": "Skip walls flagged as props. File 1's wall data has no prop flag, so this changes nothing - as in the exe."
+    },
+    {
+      "key": "cam_recover",
+      "type": "number",
+      "default": 0.1,
+      "min": 0.02,
+      "max": 1,
+      "label": "Collision Recover Speed"
+    },
+    {
+      "key": "cam_hold",
+      "type": "number",
+      "default": 0.12,
+      "min": 0,
+      "max": 1,
+      "label": "Collision Hold",
+      "description": "Seconds the camera stays pulled in after a wall clears."
+    },
+    {
+      "key": "cam_snap",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "label": "Collision Ease In",
+      "description": "0 pulls in instantly; higher values ease in."
+    },
+    {
+      "key": "near_clip",
+      "type": "number",
+      "default": 50,
+      "min": 0,
+      "max": 500,
+      "label": "Near Value",
+      "description": "The exe's near_clip, written to the camera block (0 keeps the game's). On this disc that word is the fixed camera's look distance, so it has no visible effect while the camera drives."
+    },
+    {
+      "key": "far_clip",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 200000,
+      "label": "Far Clip",
+      "description": "The projection's far plane. 0 keeps the game's (50,000). Larger values show nothing more: the game's scenes, sky included, lie within 50,000. Smaller values cut off distant scenery."
+    },
+    {
+      "key": "fov_scale",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 3,
+      "label": "Horizontal Scale",
+      "description": "The projection's horizontal scale (the game uses 1.33). 0 keeps the game's, and REO's widescreen setting."
+    },
+    {
+      "key": "cut_match",
+      "type": "boolean",
+      "default": true,
+      "label": "Match Room Cuts",
+      "description": "Borrows the room's fixed camera nearest the view, so the game draws what that angle needs."
+    },
+    {
+      "key": "cut_match_radius",
+      "type": "number",
+      "default": 250,
+      "min": 50,
+      "max": 1000,
+      "label": "Cut Match Radius"
+    },
+    {
+      "key": "cut_match_max_cuts",
+      "type": "integer",
+      "default": 6,
+      "min": 1,
+      "max": 64,
+      "label": "Cut Match Max Cuts",
+      "description": "Rooms with more cuts than this are not matched."
+    },
+    {
+      "key": "show_hidden_objects",
+      "type": "boolean",
+      "default": false,
+      "label": "Show Hidden Objects",
+      "description": "Keeps objects the fixed camera would hide visible."
+    },
+    {
+      "key": "draw_distance",
+      "type": "number",
+      "default": 1.0,
+      "min": 0.1,
+      "max": 1,
+      "label": "Draw Distance",
+      "description": "Below 1: shrinks the radii within which the game hides models close to the camera, as the exe. It stops at 1: on this disc the exe's values above 1 only enlarge those radii, which hides nearby characters, and there is no farther view to open (the game's scenes, sky included, lie within its far plane)."
+    },
+    {
+      "key": "char_light",
+      "type": "boolean",
+      "default": false,
+      "label": "Character Light Override"
+    },
+    {
+      "key": "char_light_color",
+      "type": "string",
+      "default": "#808080",
+      "maxLength": 9,
+      "label": "Character Light Colour"
+    },
+    {
+      "key": "door_hold",
+      "type": "boolean",
+      "default": true,
+      "label": "Hold Camera Through Doors",
+      "description": "When the game moves the camera (doors, scripted shots), take it back."
+    },
+    {
+      "key": "cinematic_yield",
+      "type": "boolean",
+      "default": false,
+      "label": "Yield During Cutscenes",
+      "description": "Hand the camera back while the game runs its own cinematic instead of fighting it; returns when you move again."
+    },
+    {
+      "key": "cinematic_yield_takes",
+      "type": "integer",
+      "default": 3,
+      "min": 2,
+      "max": 10,
+      "label": "Cutscene Detection Takes"
+    },
+    {
+      "key": "cinematic_yield_window",
+      "type": "number",
+      "default": 1.0,
+      "min": 0.2,
+      "max": 5,
+      "label": "Cutscene Detection Window",
+      "description": "Seconds."
+    },
+    {
+      "key": "cinematic_neutral_ms",
+      "type": "integer",
+      "default": 400,
+      "min": 50,
+      "max": 2000,
+      "label": "Resume Delay (ms)",
+      "description": "How long the stick must rest before moving resumes the camera."
+    },
+    {
+      "key": "cinematic_move_confirm_ms",
+      "type": "integer",
+      "default": 180,
+      "min": 0,
+      "max": 2000,
+      "label": "Move Confirm (ms)",
+      "description": "A dormant value of the exe: it is defined but never read, so it changes nothing."
+    },
+    {
+      "key": "sprint_mode",
+      "type": "choice",
+      "default": "Toggle",
+      "choices": [
+        "Toggle",
+        "Hold"
+      ],
+      "label": "Sprint Mode",
+      "description": "Toggle stops when you stop moving."
+    },
+    {
+      "key": "own_look_stick",
+      "type": "boolean",
+      "default": true,
+      "label": "Right Stick Only Moves the Camera",
+      "description": "The right stick is the game's ad-lib control. On, the game sees it centred, so looking around does not trigger ad-libs (not on Keyboard & Mouse, as the exe)."
+    },
+    {
+      "key": "seat_hold_seconds",
+      "type": "number",
+      "default": 4,
+      "min": 0,
+      "max": 30,
+      "label": "Seat Detection Wait",
+      "description": "The exe's online seat detection (which character is yours). REO knows the local player, so this changes nothing."
+    },
+    {
+      "key": "reload_animated",
+      "type": "boolean",
+      "default": true,
+      "label": "Animated Reload",
+      "description": "The reload uses the game's own combine routine and animation. Off: no reload (this exe version has no other reload)."
+    },
+    {
+      "key": "crosshair_color",
+      "type": "string",
+      "default": "#f2f2f2",
+      "maxLength": 9,
+      "label": "Crosshair Colour"
+    },
+    {
+      "key": "crosshair_dx",
+      "type": "integer",
+      "default": 0,
+      "min": -200,
+      "max": 200,
+      "label": "Crosshair Offset X",
+      "description": "Pixels, + = right."
+    },
+    {
+      "key": "crosshair_dy",
+      "type": "integer",
+      "default": 0,
+      "min": -200,
+      "max": 200,
+      "label": "Crosshair Offset Y",
+      "description": "Pixels, - = up."
+    },
+    {
+      "key": "reveal_button",
+      "type": "string",
+      "default": "",
+      "maxLength": 32,
+      "label": "Reveal Camera",
+      "description": "A capture aid hidden in the exe: blends between the room's own fixed camera and this one."
+    },
+    {
+      "key": "reveal_time",
+      "type": "number",
+      "default": 1.6,
+      "min": 0.2,
+      "max": 6,
+      "label": "Reveal Speed",
+      "description": "Seconds for the reveal blend."
+    },
+    {
+      "key": "debug_log",
+      "type": "boolean",
+      "default": false,
+      "label": "Camera Event Log",
+      "description": "Write the camera's events ([evt] lines) into REO's log."
+    }
+  ]
+}
