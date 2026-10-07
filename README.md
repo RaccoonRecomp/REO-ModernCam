@@ -29,10 +29,8 @@ uses was found again on this disc.
   image and no game files.
 
 > **Status.** Resident Evil Outbreak Recompiled 1.5.0 prepares the game's code from your own disc on your PC. The
-> camera can drive only in a prepared game that also has the camera's code sites compiled in (below): this download
-> carries them (`patches.json`). After you switch the mod on, **Start Game** offers to update the prepared game
-> (**Update Now**): only what the camera changes is compiled again, in about 30 to 60 seconds. Until the game is
-> updated, the camera's status says that the game code was built without the camera patches.
+> camera can drive only in a prepared game that also has the camera's code sites compiled in (below): the program
+> compiles them in when it prepares the game, so the camera works as soon as you switch the mod on.
 
 The camera never writes the game's code. To stop the game's own camera and gun servo it switches two features compiled
 into the prepared game code, `camera.freeze` and `camera.freeAim`, and it runs at three marks there (the game frame,
