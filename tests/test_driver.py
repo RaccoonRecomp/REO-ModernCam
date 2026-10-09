@@ -898,6 +898,149 @@ g.write = (lambda orig: (lambda: (orig(), [m.ee.__setitem__(PADBLK + i * 0x80 + 
 g.frame(10)
 check(max(abs(a - b) for a, b in zip(g.eye(), e0)) > 10, "the right stick of the game's pad turns the camera")
 
+print("== 27. the game's aim lock: the camera stays on the target, on its side, and never pulls back")
+# The game's auto-aim (reo_camera_us.h, REO_CHAR_AIM_TARGET): in the aim stance (2) with the aim action held, her
+# record's +0x24 points at the enemy record the game chose (0x0042EB00 + index * 0xD90).
+ENEMY = 0x0042EB00 + 44 * 0xD90
+
+
+def stage_lock(m, x, z, stance=2, held=0x400):
+    m.ee[ENEMY] = 1
+    m.ee_set_u32(ENEMY + 0x34, 0x00460000)
+    m.ee_set_u32(ENEMY + 0xC94, 0)
+    m.ee_set_f32(ENEMY + 0x38, x)
+    m.ee_set_f32(ENEMY + 0x3C, 0.0)
+    m.ee_set_f32(ENEMY + 0x40, z)
+    m.ee[CHAR + 0x08] = stance
+    m.ee_set_u32(CHAR + 0xF80, held)
+    m.ee_set_u32(CHAR + 0x24, ENEMY)
+
+
+def view_yaw(g):
+    e, t = g.eye(), g.tgt()
+    return math.degrees(math.atan2(t[0] - e[0], t[2] - e[2]))
+
+
+def to_target(g, x, z):
+    return math.degrees(math.atan2(x - g.px, z - g.pz))
+
+
+def wall_across_boom(m, g):
+    e, t = g.eye(), g.tgt()
+    boom = math.hypot(e[0] - t[0], e[2] - t[2])
+    mx, mz = (e[0] + t[0]) / 2, (e[2] + t[2]) / 2
+    dx, dz = (e[0] - t[0]) / boom, (e[2] - t[2]) / boom
+    px_, pz_ = -dz * 400, dx * 400
+    walls = 0x01E00000
+    tri = [(mx - px_, -100.0, mz - pz_), (mx + px_, -100.0, mz + pz_), (mx + px_, 400.0, mz + pz_)]
+    m.ee_set_u32(walls, 0x002D0000)
+    for i, (x, y, z) in enumerate(tri):
+        m.ee_set_f32(walls + 4 + i * 12, x)
+        m.ee_set_f32(walls + 8 + i * 12, y)
+        m.ee_set_f32(walls + 12 + i * 12, z)
+    m.ee_set_f32(walls + 0x28, dx)
+    m.ee_set_f32(walls + 0x2C, 0.0)
+    m.ee_set_f32(walls + 0x30, dz)
+    m.ee_set_u32(walls + 0x38, 0)
+    m.ee_set_u32(WALL_PTR, walls)
+
+
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+m.config["rotate_mode"] = 1  # Keep Behind Character, as the owner plays
+m.config["debug_log"] = 1
+g.frame(3)
+# the enemy 400 units off her right side: the camera behind her looks 90 deg away from it
+ex = g.px + 400.0 * math.sin(math.radians(g.heading - 90.0))
+ez = g.pz + 400.0 * math.cos(math.radians(g.heading - 90.0))
+side0 = boom_side(g, g.tgt())
+g.host.held = AIM
+stage_lock(m, ex, ez)
+g.frame(20)
+check(abs(angwrap(view_yaw(g) - to_target(g, ex, ez))) < 2.0,
+      "the camera turns onto the target (view %.1f, target %.1f)" % (view_yaw(g), to_target(g, ex, ez)))
+check(abs(angwrap(g.heading - to_target(g, ex, ez))) <= 12.5,
+      "Modern Aim turns her to the target, not away from it (facing %.1f, target %.1f)"
+      % (g.heading, to_target(g, ex, ez)))
+check(any("aim lock: on" in s for s in g.host.logs), "logged: aim lock on")
+# the target walks round her: the camera stays on it
+for k in range(30):
+    a = math.radians(g.heading - 90.0 + 3.0 * (k + 1))
+    ex, ez = g.px + 400.0 * math.sin(a), g.pz + 400.0 * math.cos(a)
+    m.ee_set_f32(ENEMY + 0x38, ex)
+    m.ee_set_f32(ENEMY + 0x40, ez)
+    g.frame(1)
+g.frame(10)
+check(abs(angwrap(view_yaw(g) - to_target(g, ex, ez))) < 2.0,
+      "the target moved round her: the camera stays on it (view %.1f, target %.1f)"
+      % (view_yaw(g), to_target(g, ex, ez)))
+# the right stick does not turn the camera off the target while the lock holds
+g.host.rx = 1.0
+g.frame(15)
+g.host.rx = 0.0
+check(abs(angwrap(view_yaw(g) - to_target(g, ex, ez))) < 2.0, "the right stick does not take it off the target")
+# Swap Shoulder while locked: the side stays (and is not saved)
+writes = len(g.host.config_writes)
+g.host.held = AIM | SWAP
+g.frame(1)
+g.host.held = AIM
+g.frame(20)
+check(boom_side(g, g.tgt()) * side0 > 0 and len(g.host.config_writes) == writes,
+      "Swap Shoulder while locked: the camera stays on its side (%.0f -> %.0f), nothing saved"
+      % (side0, boom_side(g, g.tgt())))
+check(any("shoulder: kept" in s for s in g.host.logs), "logged: shoulder kept")
+# never pulls back: a wall pulls the boom in; when it goes the boom stays in until the lock ends
+b_lock = g.boom()
+wall_across_boom(m, g)
+g.frame(3)
+b_in = g.boom()
+m.ee_set_u32(WALL_PTR, 0)
+g.frame(60)
+b_after = g.boom()
+check(b_in < b_lock * 0.6 and b_after <= b_in + 0.5,
+      "wall: pulled in from %.0f to %.0f; wall gone: it stays %.0f while locked" % (b_lock, b_in, b_after))
+# a hit while aiming (stance 3, aim held) keeps the lock
+m.ee[CHAR + 0x08] = 3
+g.frame(20)
+check(abs(angwrap(view_yaw(g) - to_target(g, ex, ez))) < 2.0 and g.boom() <= b_in + 0.5,
+      "hit while aiming (stance 3): still on the target, still %.0f" % g.boom())
+# the aim is let go: the lock ends after its short grace; the camera is free again and the boom recovers
+m.ee[CHAR + 0x08] = 1
+m.ee_set_u32(CHAR + 0xF80, 0)
+g.host.held = 0
+g.frame(90)
+check(any("aim lock: released" in s for s in g.host.logs) and g.boom() > b_lock * 0.9,
+      "aim let go: lock released, the boom recovers (%.0f)" % g.boom())
+v0 = view_yaw(g)
+g.host.rx = 1.0
+g.frame(10)
+g.host.rx = 0.0
+check(abs(angwrap(view_yaw(g) - v0)) > 20.0, "after the lock the right stick turns the camera again")
+# Aim: Custom Distance longer than Main: the lock does not pull the camera back to it
+m.config["aim_distance_set"] = 1
+m.config["aim_distance"] = 495
+g.host.held = AIM
+stage_lock(m, ex, ez)
+g.frame(1)
+b1 = g.boom()
+g.frame(40)
+check(g.boom() <= b1 + 0.5 and g.boom() < 480,
+      "locked while a longer aim distance blends in: the boom stays %.0f (not %d)" % (g.boom(), 495))
+# an enemy the game can no longer target (+0xC94 bit 0) ends the lock
+m.ee_set_u32(ENEMY + 0xC94, 1)
+g.frame(10)
+check(g.boom() > 400, "the target can no longer be targeted: lock released, the aim distance applies (%.0f)"
+      % g.boom())
+# no target (+0x24 = 0): Modern Aim as before, the camera stays where it is
+m.config["aim_distance_set"] = 0
+m.ee_set_u32(CHAR + 0x24, 0)
+g.frame(10)
+v1 = view_yaw(g)
+g.frame(20)
+check(abs(angwrap(view_yaw(g) - v1)) < 0.5, "aiming without a target: the camera does not move by itself")
+check(not code_touched(m), "no game code read or written")
+
 print("== 26. cost: MIPS instructions per game frame")
 typical = sorted(steps)[len(steps) // 2]
 print("  frames %d, median %d, max %d instructions" % (len(steps), typical, max(steps)))

@@ -1,6 +1,6 @@
 # REO_ModernCam v2: the host API it imports
 
-This is the contract between the Modern Camera mod (`build/mod.elf` / `REO_ModernCam.nrm`, v2.0.0) and the parts of
+This is the contract between the Modern Camera mod (`build/mod.elf` / `REO_ModernCam.nrm`, v2.0.1) and the parts of
 Resident Evil Outbreak Recompiled that run it: the sandboxed mod runtime, the camera's host services and the live
 settings window. The mod side of the same contract is `include/reo_host.h`. The fake host in `tests/test_driver.py`
 implements every function below and is the reference for its behaviour.

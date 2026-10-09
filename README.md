@@ -6,7 +6,7 @@ with the right stick or the mouse, with aiming, free gun elevation, a crosshair 
 
 This mod is a recreation. I studied Snippy's original Outbreak ModernCam mod for Resident Evil Outbreak and learned how to recreate it in my own way for Resident Evil Outbreak Recompiled. Snippy gave me the idea of doing this for the recompiled version, and all credit for the original camera design goes to him. Go check out Snippy's ModernCam for the PS2 version: [heysnippy.com](https://heysnippy.com/mods/outbreak-moderncam/) and [the video](https://youtu.be/lpQUNS5klBY).
 
-- Mod id `reo-modern-camera`, version **2.0.0**.
+- Mod id `reo-modern-camera`, version **2.0.1**.
 - 116 settings, every one of them changeable while you play.
 
 > Unofficial fan project, not affiliated with or endorsed by Capcom or Snippy. See [Legal](#legal).
@@ -41,7 +41,7 @@ so.
 
 ## Install
 
-1. Download `reo-modern-camera-2.0.0.zip` from this repository's **Releases** page (it is also in the
+1. Download `reo-modern-camera-2.0.1.zip` from this repository's **Releases** page (it is also in the
    [`release`](release) folder). Do not unpack it.
 2. In Resident Evil Outbreak Recompiled, open **Mods**, choose **Install Mods** and pick the zip.
 3. Make sure the mod is switched on in the list. Press **F8** (or **Camera Window** next to Configure on the Mods tab)
@@ -67,6 +67,10 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
   Recenter Speed. Camera Side and Yaw Offset put it elsewhere around her.
 - **Modern Aim**: she turns to where the camera looks, the gun follows the camera up and down (Free Gun Elevation),
   Lock Look to the Gun keeps the view in the gun's range, and you can walk while aiming.
+- **Aim lock**: when she aims and the game locks onto an enemy (its auto-aim, with the Aim button or the game's own
+  aim button), the camera turns onto that enemy and stays on it while it moves, keeps the shoulder side it had (Swap
+  Shoulder does nothing until the lock ends) and does not pull back (walls can still pull it in). The lock ends when
+  the aim is let go or the game can no longer target that enemy.
 - **Crosshair** while aiming: dot or cross, size, gap, thickness, colour and offset, drawn by the program over the game
   picture (never part of the game's own picture).
 - **Buttons**: Shoot fires with whatever button fires under your control type; Sprint (toggle or hold); Reload

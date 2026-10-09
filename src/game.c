@@ -154,6 +154,31 @@ u32 mc_in_aim_state(void) {
     return Mc_ReadU8(mc_char_base(sPlayerSlot) + REO_CHAR_STANCE) == 2;
 }
 
+u32 mc_aim_target(Mc_Vec3* pos) {
+    u32 base = mc_char_base(sPlayerSlot);
+    u32 stance = Mc_ReadU8(base + REO_CHAR_STANCE);
+    u32 t;
+
+    // Aiming, or hit while aiming, with the aim action still held: the game keeps the target it chose.
+    if ((stance != REO_STANCE_AIM && stance != REO_STANCE_AIM_HIT) ||
+        !(Mc_ReadU32(base + REO_CHAR_ACT + 8) & REO_ACT_AIM)) {
+        return 0;
+    }
+    t = Mc_ReadU32(base + REO_CHAR_AIM_TARGET);
+    // An enemy record (never a stray word): inside the finder's table, on a record boundary.
+    if (t < REO_US_ENEMY_BASE || t >= REO_US_CHAR_BASE || (t - REO_US_ENEMY_BASE) % REO_US_ENEMY_STRIDE != 0) {
+        return 0;
+    }
+    if (Mc_ReadU8(t + REO_ENEMY_LIVE) == 0 || Mc_ReadU32(t + REO_ENEMY_MODEL) == 0 ||
+        (Mc_ReadU32(t + REO_ENEMY_FLAGS) & REO_ENEMY_UNTARGETABLE)) {
+        return 0;
+    }
+    pos->x = Mc_ReadF32(t + REO_ENEMY_POS);
+    pos->y = Mc_ReadF32(t + REO_ENEMY_POS + 4);
+    pos->z = Mc_ReadF32(t + REO_ENEMY_POS + 8);
+    return Mc_IsSaneF32(pos->x) && Mc_IsSaneF32(pos->y) && Mc_IsSaneF32(pos->z);
+}
+
 u32 mc_busy_with_action(void) {
     return Mc_ReadU8(mc_char_base(sPlayerSlot) + REO_CHAR_SUBSTATE) == 0x40;
 }

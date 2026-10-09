@@ -27,6 +27,9 @@
 #define MC_RELOAD_GRACE  0.6f
 #define MC_RELOAD_EXPIRE 72u    // vblanks the host keeps a reload call queued (the exe polls 12 x 50 ms)
 #define MC_PADMAP_MISSING 30u   // game frames without a pad-map call before the per-frame fallback
+#define MC_LOCK_TURN     0.25f  // the aim lock turns the camera onto its target with smooth_alpha(this) per frame
+#define MC_LOCK_MIN_DIST 40.0f  // a target nearer than this (holding her) keeps the lock's last direction
+#define MC_LOCK_GRACE    3u     // game frames the lock holds through a gap (the game aims again after a hit)
 
 typedef struct {
     u32 press;   // SCE bits the game gets pressed
@@ -98,6 +101,16 @@ typedef struct {
     // Steering
     u32 haveSteerYaw;
     f32 steerYaw;
+
+    // The game's aim lock (the target her aim stance chose): the camera stays on it, on its side, at its distance
+    u32 locked;
+    f32 lockSide;
+    u32 haveLockYaw;
+    f32 lockYaw;
+    u32 haveLockDist;
+    f32 lockDist;
+    u32 lockMiss;
+    Mc_Vec3 lockPos;
 
     // Doors and cutscenes
     u32 haveLastWritten;
@@ -263,6 +276,16 @@ static void release_reload(void) {
     s.reloadTicket = 0;
 }
 
+static void lock_release(void) {
+    if (s.locked) {
+        evt("[evt] aim lock: released", 0, 0);
+    }
+    s.locked = 0;
+    s.lockMiss = 0;
+    s.haveLockYaw = 0;
+    s.haveLockDist = 0;
+}
+
 // Undo everything the mod changed (the exe's shutdown order).
 static void hand_back_all(void) {
     input_neutral();
@@ -287,6 +310,7 @@ static void hand_back_all(void) {
         s.aspectOn = 0;
     }
     release_reload();
+    lock_release();
     unfreeze(s.levelLive);
     mc_feature(MC_FEAT_FREEZE, 0);
     s.levelLive = 0;
@@ -402,6 +426,7 @@ static u32 check_camera_taken(const Mc_Config* cfg) {
             input_neutral();
             crosshair_off();
             release_reload();
+            lock_release();
             evt("[evt] cinematic: camera handed back", 0, 0);
             return 1;
         }
@@ -624,7 +649,7 @@ static void driver_frame(void) {
     ReoCamInput in;
     ReoCrosshair xh;
     Mc_Rig hipRig, aimRig, eff;
-    Mc_Vec3 eye, look;
+    Mc_Vec3 eye, look, lockPos;
     u32 frames = Mc_ReadU32(REO_US_FRAMES);
     u32 pressed, held, bound, aiming, aimReal, aimingNow, inputMoving, looking, kbm, haveInput;
     u32 pressBits, suppBits, hideActs, sprintHeld, fireBit, dashBit, writeFov, active, steering, aimSteer;
@@ -675,6 +700,7 @@ static void driver_frame(void) {
             s.cineYield = 0;
             mc_walls_invalidate();
             release_reload();
+            lock_release();
             s.levelLive = 0;
             mc_set_view_slot(mc_player_slot());
             evt("[evt] no level: idling, camera and pad handed back", 0, 0);
@@ -751,6 +777,27 @@ static void driver_frame(void) {
         s.camYaw = mc_view_yaw_deg() + 180.0f;
     }
 
+    // ---- The game's aim lock: her aim stance chose a target (the auto-aim). Until it ends the camera stays aimed at
+    // the target, keeps the shoulder side it had when the lock began and never pulls back.
+    if (mc_view_slot() == mc_player_slot() && mc_aim_target(&lockPos)) {
+        if (!s.locked) {
+            s.locked = 1;
+            s.lockSide = s.shoulderTarget;
+            s.haveLockYaw = 0;
+            s.haveLockDist = 0;
+            evt("[evt] aim lock: on", 0, 0);
+        }
+        s.lockMiss = 0;
+        s.lockPos = lockPos;
+    } else if (s.locked && ++s.lockMiss <= MC_LOCK_GRACE) {
+        lockPos = s.lockPos; // a short gap: the lock holds where it was
+    } else {
+        lock_release();
+    }
+    if (s.locked) {
+        s.shoulderTarget = s.lockSide;
+    }
+
     // ---- Input: the camera's own device (host), binds as camera actions
     haveInput = reo_cam_input(&in) && in.version == REO_CAM_INPUT_VERSION;
     if (!haveInput) {
@@ -809,7 +856,9 @@ static void driver_frame(void) {
             s.revealDir = 1;
         }
     }
-    if (pressed & REO_CAM_ACT_SWAP) {
+    if ((pressed & REO_CAM_ACT_SWAP) && s.locked) {
+        evt("[evt] shoulder: kept while the aim lock holds", 0, 0);
+    } else if (pressed & REO_CAM_ACT_SWAP) {
         f32 m = mc_absf(cfg.hip.shoulder);
 
         s.shoulderTarget = -s.shoulderTarget;
@@ -882,6 +931,9 @@ static void driver_frame(void) {
 
     looking = mc_absf(rx) > MC_LOOK_THRESH || mc_absf(mdx) > 0.001f;
     dyaw = (-(rx * ydir) * cfg.stickSpeed * dt - mdx * ydir * msens) * lookScale;
+    if (s.locked) {
+        dyaw = 0.0f; // the lock holds the yaw on its target
+    }
     s.camYaw += dyaw;
     s.lookOff = mc_angwrap(s.lookOff + dyaw);
 
@@ -1039,37 +1091,60 @@ static void driver_frame(void) {
     behind = cfg.followBehind ? 180.0f : 0.0f;
     s.follow.moveHold = mc_maxf(0.0f, cfg.followHold);
     active = mc_follow_update(&s.follow, px, pz, playerYaw, dt, inputMoving, aimingNow, &baseYaw);
-    if (!looking && !(aimingNow && cfg.aimFreeLook) && cfg.keepBehind) {
-        mc_release_free_look(&s.camYaw, &s.lookOff, dt, cfg.freeLookReturn);
-    }
-    viewYaw = mc_angwrap(s.camYaw - behind);
     aimSteer = (aiming || aimingNow) && cfg.modernAim;
     steering = cfg.turnToCamera != MC_TURN_OFF || aimSteer;
-    if (active && (cfg.keepBehind || (aimingNow && cfg.aimFollow && !aimSteer)) && !steering) {
-        f32 k = aimingNow ? cfg.aimFollowStrength : cfg.followStrength;
-        f32 target = baseYaw + behind + cfg.yawOffset + s.lookOff;
+    if (s.locked) {
+        // The aim lock: the camera turns onto the line from the target through her (follow, free-look return, snap
+        // and recenter do not move it), and Modern Aim steers her toward the target itself.
+        f32 tx = lockPos.x - px;
+        f32 tz = lockPos.z - pz;
 
-        s.camYaw += mc_angwrap(target - s.camYaw) * mc_smooth_alpha(mc_maxf(0.02f, k), dt);
-    }
-    if (aimReal && !s.aimPrev && cfg.aimSnapBehind) {
-        s.lookOff = 0.0f;
-    }
-    if (cfg.aimSnapBehind && aimingNow && !aimSteer) {
-        f32 snapTarget = playerYaw + behind + cfg.yawOffset + s.lookOff;
-
-        if (mc_absf(mc_angwrap(snapTarget - s.camYaw)) > 0.5f) {
-            s.camYaw += mc_angwrap(snapTarget - s.camYaw) *
-                        mc_smooth_alpha(mc_clampf(cfg.aimSnapSpeed, 0.1f, 1.0f), dt);
+        if (mc_hypotf(tx, tz) >= MC_LOCK_MIN_DIST) {
+            s.lockYaw = mc_angwrap(mc_atan2f(tx, tz) * MC_RAD2DEG + behind);
+            s.haveLockYaw = 1;
+        } else if (!s.haveLockYaw) {
+            s.lockYaw = s.camYaw;
+            s.haveLockYaw = 1;
         }
-    }
-    s.aimPrev = aimReal;
-    if (s.recenterTimer > 0.0f) {
-        f32 a = mc_minf(1.0f, dt * 15.0f);
+        s.camYaw += mc_angwrap(s.lockYaw - s.camYaw) * mc_smooth_alpha(MC_LOCK_TURN, dt);
+        s.lookOff = mc_angwrap(s.camYaw - (playerYaw + behind + cfg.yawOffset));
+        viewYaw = mc_angwrap(s.lockYaw - behind);
+        s.aimPrev = aimReal;
+        if (s.recenterTimer > 0.0f) {
+            s.recenterTimer -= dt;
+            s.pitch = mc_lerp(s.pitch, 0.0f, mc_minf(1.0f, dt * 15.0f));
+        }
+    } else {
+        if (!looking && !(aimingNow && cfg.aimFreeLook) && cfg.keepBehind) {
+            mc_release_free_look(&s.camYaw, &s.lookOff, dt, cfg.freeLookReturn);
+        }
+        viewYaw = mc_angwrap(s.camYaw - behind);
+        if (active && (cfg.keepBehind || (aimingNow && cfg.aimFollow && !aimSteer)) && !steering) {
+            f32 k = aimingNow ? cfg.aimFollowStrength : cfg.followStrength;
+            f32 target = baseYaw + behind + cfg.yawOffset + s.lookOff;
 
-        s.recenterTimer -= dt;
-        s.camYaw += mc_angwrap(playerYaw + behind - s.camYaw) * a;
-        s.lookOff = mc_lerp(s.lookOff, 0.0f, a);
-        s.pitch = mc_lerp(s.pitch, 0.0f, a);
+            s.camYaw += mc_angwrap(target - s.camYaw) * mc_smooth_alpha(mc_maxf(0.02f, k), dt);
+        }
+        if (aimReal && !s.aimPrev && cfg.aimSnapBehind) {
+            s.lookOff = 0.0f;
+        }
+        if (cfg.aimSnapBehind && aimingNow && !aimSteer) {
+            f32 snapTarget = playerYaw + behind + cfg.yawOffset + s.lookOff;
+
+            if (mc_absf(mc_angwrap(snapTarget - s.camYaw)) > 0.5f) {
+                s.camYaw += mc_angwrap(snapTarget - s.camYaw) *
+                            mc_smooth_alpha(mc_clampf(cfg.aimSnapSpeed, 0.1f, 1.0f), dt);
+            }
+        }
+        s.aimPrev = aimReal;
+        if (s.recenterTimer > 0.0f) {
+            f32 a = mc_minf(1.0f, dt * 15.0f);
+
+            s.recenterTimer -= dt;
+            s.camYaw += mc_angwrap(playerYaw + behind - s.camYaw) * a;
+            s.lookOff = mc_lerp(s.lookOff, 0.0f, a);
+            s.pitch = mc_lerp(s.pitch, 0.0f, a);
+        }
     }
 
     // ---- Rig: blend hip -> aim
@@ -1083,6 +1158,14 @@ static void driver_frame(void) {
         if (aimRig.fovDeg <= 0.0f) aimRig.fovDeg = engineFov;
     }
     mc_blend_rig(&hipRig, &aimRig, s.aimAmt, &eff);
+    if (s.locked) {
+        // The aim lock never pulls the camera back: its distance may shorten, not grow, until the lock ends.
+        if (s.haveLockDist && eff.distance > s.lockDist) {
+            eff.distance = s.lockDist;
+        }
+        s.lockDist = eff.distance;
+        s.haveLockDist = 1;
+    }
     eff.lookDrop *= 1.0f - s.aimAmt;
     mag = mc_absf(eff.shoulder);
     if (s.aimAmt > 0.001f && cfg.aimShoulderMin > 0.0f) {
@@ -1124,8 +1207,8 @@ static void driver_frame(void) {
             } else {
                 s.camT = tHit;
             }
-        } else if (s.camHoldTimer > 0.0f) {
-            // hold the pulled-in boom
+        } else if (s.camHoldTimer > 0.0f || s.locked) {
+            // hold the pulled-in boom (the aim lock: until it ends)
         } else {
             s.camT += (tHit - s.camT) * mc_smooth_alpha(mc_maxf(0.02f, cfg.camRecover), dt);
         }

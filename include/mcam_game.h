@@ -38,6 +38,9 @@ f32 mc_player_heading_deg(void);    // from the heading field
 void mc_set_player_heading(f32 deg);
 void mc_set_aim_angle_deg(f32 deg);
 u32 mc_in_aim_state(void);
+// The game's aim lock: in the aim stance with a target the game chose (reo_camera_us.h, REO_CHAR_AIM_TARGET) that is
+// still an enemy it can target. Returns 1 and the target's position, else 0.
+u32 mc_aim_target(Mc_Vec3* pos);
 u32 mc_busy_with_action(void);
 f32 mc_aim_move_step(f32 right, f32 forward, f32 dt, f32 speed);
 

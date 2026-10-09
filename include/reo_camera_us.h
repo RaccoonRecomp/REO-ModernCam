@@ -92,6 +92,24 @@
 #define REO_CHAR_ACT       0xF78  // action block: +0 pressed, +8 held, +0x20..+0x2F stick copy
 #define REO_CHAR_AI_GATE   0xFF0  // u8, 0 = player-driven
 #define REO_AIM_ANGLE_MAX  0x1FFF
+// u32, the aim target (the game's auto-aim lock): when she raises the weapon with the aim action, the aim-stance entry
+// 0x0064E5C0 stores the target finder's result (0x0065F060 -> 0x0065ED70: the nearest enemy in range and in front of
+// her, 0 = none) here and sets the stance to 2. The word is not cleared when the aim ends: it counts only while she
+// aims (stance 2) or takes a hit while aiming (stance 3, 0x00661074; when it ends the game aims and looks again).
+#define REO_STANCE_AIM     2
+#define REO_STANCE_AIM_HIT 3
+#define REO_CHAR_AIM_TARGET 0x024
+
+// ---- Enemies (submain.bin bss) ---------------------------------------------------------------------------------
+// The records the target finder walks: 0x0042EB00 + index * 0xD90 (0x0065EEC0), up to the character records. The finder
+// skips a record whose +0xC94 bit 0 is set; 0x0065F0C0 also needs +0 (u8 live) and +0x34 (its model) non-zero.
+#define REO_US_ENEMY_BASE   0x0042EB00
+#define REO_US_ENEMY_STRIDE 0xD90
+#define REO_ENEMY_LIVE      0x000
+#define REO_ENEMY_MODEL     0x034
+#define REO_ENEMY_POS       0x038  // f32 x,y,z (as a character record's)
+#define REO_ENEMY_FLAGS     0xC94
+#define REO_ENEMY_UNTARGETABLE 0x1
 
 // ---- Camera cuts (submain.bin bss; Japanese + 0x2EE60) ------------------------------------------
 // Header: +1 u8 cut count, +3 u8 current cut, +5 u8 forced cut, +6 u8 force flag; records of 0x198
@@ -193,5 +211,6 @@
 #define REO_ACT_DASH    0x0010
 #define REO_ACT_FIRE    0x0020
 #define REO_ACT_USE     0x0100
+#define REO_ACT_AIM     0x0400 // R1: the aim-stance entry looks for a target only for this action
 
 #endif
