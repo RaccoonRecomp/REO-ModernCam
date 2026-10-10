@@ -212,5 +212,6 @@
 #define REO_ACT_FIRE    0x0020
 #define REO_ACT_USE     0x0100
 #define REO_ACT_AIM     0x0400 // R1: the aim-stance entry looks for a target only for this action
+#define REO_ACT_MOVE    0x000F // forward 0x1, back 0x2, left 0x4, right 0x8 (held word +8): the player moves her
 
 #endif

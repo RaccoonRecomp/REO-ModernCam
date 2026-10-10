@@ -92,6 +92,7 @@ void mc_config_read(Mc_Config* cfg) {
     cfg->aimSnapSpeed = num("aim_snap_speed");
     cfg->aimShoulderMin = num("aim_shoulder_min");
     cfg->modernAimDeadzone = num("modern_aim_deadzone");
+    cfg->lockOnEnemy = opt("lock_on_enemy");
 
     cfg->crosshair = opt("crosshair");
     cfg->crosshairStyle = opt("crosshair_style");

@@ -6,8 +6,8 @@ with the right stick or the mouse, with aiming, free gun elevation, a crosshair 
 
 This mod is a recreation. I studied Snippy's original Outbreak ModernCam mod for Resident Evil Outbreak and learned how to recreate it in my own way for Resident Evil Outbreak Recompiled. Snippy gave me the idea of doing this for the recompiled version, and all credit for the original camera design goes to him. Go check out Snippy's ModernCam for the PS2 version: [heysnippy.com](https://heysnippy.com/mods/outbreak-moderncam/) and [the video](https://youtu.be/lpQUNS5klBY).
 
-- Mod id `reo-modern-camera`, version **2.0.1**.
-- 116 settings, every one of them changeable while you play.
+- Mod id `reo-modern-camera`, version **2.1.0**.
+- 117 settings, every one of them changeable while you play.
 
 > Unofficial fan project, not affiliated with or endorsed by Capcom or Snippy. See [Legal](#legal).
 
@@ -41,7 +41,7 @@ so.
 
 ## Install
 
-1. Download `reo-modern-camera-2.0.1.zip` from this repository's **Releases** page (it is also in the
+1. Download `reo-modern-camera-2.1.0.zip` from this repository's **Releases** page (it is also in the
    [`release`](release) folder). Do not unpack it.
 2. In Resident Evil Outbreak Recompiled, open **Mods**, choose **Install Mods** and pick the zip.
 3. Make sure the mod is switched on in the list. Press **F8** (or **Camera Window** next to Configure on the Mods tab)
@@ -63,14 +63,19 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
   raw mouse look (the Free Cursor button, C, releases and recaptures the mouse).
 - **Framing**: Main, Aim and Alt rigs, each with distance, left / right, height, field of view, look drop and pitch
   trim. An Aim or Alt value follows Main until you set it ("Custom"), as in ModernCam.
-- **Keep Behind Character** (off by default): the camera swings back behind her; a free look eases back after the
-  Recenter Speed. Camera Side and Yaw Offset put it elsewhere around her.
+- **The camera stays on her**: it turns only when you turn it, and with Keep Behind Character with her facing while you
+  move her; knockbacks, hits, recoil and the game's auto-aim do not swing it. It keeps its shoulder side until you
+  press Swap Shoulder, and it does not pull back: walls can bring it closer, and it goes back to its distance when you
+  move her or the camera, never further.
+- **Keep Behind Character** (off by default): the camera swings back behind her as you move her; a free look eases
+  back after the Recenter Speed. Camera Side and Yaw Offset put it elsewhere around her.
 - **Modern Aim**: she turns to where the camera looks, the gun follows the camera up and down (Free Gun Elevation),
   Lock Look to the Gun keeps the view in the gun's range, and you can walk while aiming.
-- **Aim lock**: when she aims and the game locks onto an enemy (its auto-aim, with the Aim button or the game's own
-  aim button), the camera turns onto that enemy and stays on it while it moves, keeps the shoulder side it had (Swap
-  Shoulder does nothing until the lock ends) and does not pull back (walls can still pull it in). The lock ends when
-  the aim is let go or the game can no longer target that enemy.
+- **Lock On Enemy** (Aiming tab, on by default): when she aims and the game locks onto an enemy (its auto-aim, with
+  the Aim button or the game's own aim button), the camera turns onto that enemy and stays on it while it moves, she
+  faces it, the camera keeps the shoulder side it had (Swap Shoulder does nothing until the lock ends) and does not
+  pull back (walls can still pull it in). The lock ends when the aim is let go or the game can no longer target that
+  enemy; the camera then turns back behind her. Off: the camera stays on her while she aims too.
 - **Crosshair** while aiming: dot or cross, size, gap, thickness, colour and offset, drawn by the program over the game
   picture (never part of the game's own picture).
 - **Buttons**: Shoot fires with whatever button fires under your control type; Sprint (toggle or hold); Reload
@@ -170,6 +175,7 @@ controller buttons, `key:0x..` keys, `mb:0x..` mouse buttons.
 | Aiming | Lock Look to the Gun (`aim_pitch_lock`) | On | On / Off | While aiming, stop the camera tilting further than the gun can follow. |
 | Aiming | Aim Sensitivity (`aim_sensitivity`) | 0.55 | 0.1 to 1.5 | Look speed multiplier while aiming. |
 | Aiming | Gun Elevation (`gun_pitch_max`) | 45 | 5 to 45 | How far up and down the gun can point, in degrees. |
+| Aiming | Lock On Enemy (`lock_on_enemy`) | On | On / Off | While you aim, the camera turns onto the enemy the game locks onto and follows it; your character faces it; the shoulder side and the distance stay. |
 | Reticle | Crosshair (`crosshair`) | On | On / Off | Show a crosshair while aiming (drawn by REO over the game picture). |
 | Reticle | Crosshair Shape (`crosshair_style`) | Dot | Dot, Cross |  |
 | Reticle | Crosshair Size (`crosshair_size`) | 3 | 1 to 16 | Pixels: the dot's radius or the cross's arm length. |

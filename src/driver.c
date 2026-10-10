@@ -30,6 +30,7 @@
 #define MC_LOCK_TURN     0.25f  // the aim lock turns the camera onto its target with smooth_alpha(this) per frame
 #define MC_LOCK_MIN_DIST 40.0f  // a target nearer than this (holding her) keeps the lock's last direction
 #define MC_LOCK_GRACE    3u     // game frames the lock holds through a gap (the game aims again after a hit)
+#define MC_RELOCATE_DIST 100.0f // a step longer than this in one game frame: the game put her somewhere else
 
 typedef struct {
     u32 press;   // SCE bits the game gets pressed
@@ -102,6 +103,14 @@ typedef struct {
     u32 haveSteerYaw;
     f32 steerYaw;
 
+    // The player's own control: seconds since the player last moved her. Outside the aim lock the camera turns with
+    // her only while the player moves her, and its boom grows back after a wall only when the player opened the space
+    // (moved her or the camera), never by itself.
+    f32 moveIdle;
+    u32 boomReturn;
+    u32 havePrevPos;
+    f32 prevPx, prevPz;
+
     // The game's aim lock (the target her aim stance chose): the camera stays on it, on its side, at its distance
     u32 locked;
     f32 lockSide;
@@ -111,6 +120,7 @@ typedef struct {
     f32 lockDist;
     u32 lockMiss;
     Mc_Vec3 lockPos;
+    u32 lockReturn; // the lock has ended: the camera turns back behind her
 
     // Doors and cutscenes
     u32 haveLastWritten;
@@ -236,6 +246,10 @@ static void reset_rig_to_player(void) {
     s.pitch = 0.0f;
     s.haveSteerYaw = 0;
     s.haveLastWritten = 0;
+    s.camT = 1.0f; // seeded behind her: the boom starts at its distance and the walls pull it in at once
+    s.boomReturn = 0;
+    s.lockReturn = 0;
+    s.havePrevPos = 0;
 }
 
 // Put back the room's own camera for the current cut: the pose, FOV and clip values the fixed-camera handler would
@@ -279,11 +293,13 @@ static void release_reload(void) {
 static void lock_release(void) {
     if (s.locked) {
         evt("[evt] aim lock: released", 0, 0);
+        // haveLockDist stays for this frame: the boom keeps the lock's length (driver_frame, the rig)
+    } else {
+        s.haveLockDist = 0;
     }
     s.locked = 0;
     s.lockMiss = 0;
     s.haveLockYaw = 0;
-    s.haveLockDist = 0;
 }
 
 // Undo everything the mod changed (the exe's shutdown order).
@@ -641,6 +657,7 @@ static void driver_init(void) {
     s.captureOn = 1; // the exe starts with mouse capture on
     s.cutForced = s.cutCand = -1;
     s.status = REO_CAM_STATUS_OFF;
+    s.moveIdle = 1e9f;
     mc_follow_init(&s.follow);
 }
 
@@ -653,7 +670,7 @@ static void driver_frame(void) {
     u32 frames = Mc_ReadU32(REO_US_FRAMES);
     u32 pressed, held, bound, aiming, aimReal, aimingNow, inputMoving, looking, kbm, haveInput;
     u32 pressBits, suppBits, hideActs, sprintHeld, fireBit, dashBit, writeFov, active, steering, aimSteer;
-    u32 freezeState, rate, centreL, centreR;
+    u32 freezeState, rate, centreL, centreR, wasLocked, playerActs;
     f32 dt, px, py, pz, playerYaw, baseYaw, viewYaw, lx, ly, rx, ry, mdx, mdy, behind;
     f32 pdir, ydir, msens, lookScale, aimTrim, gunLim, aimZero, plo, phi, dyaw, mag, blend;
 
@@ -777,14 +794,19 @@ static void driver_frame(void) {
         s.camYaw = mc_view_yaw_deg() + 180.0f;
     }
 
-    // ---- The game's aim lock: her aim stance chose a target (the auto-aim). Until it ends the camera stays aimed at
-    // the target, keeps the shoulder side it had when the lock began and never pulls back.
-    if (mc_view_slot() == mc_player_slot() && mc_aim_target(&lockPos)) {
+    // ---- The game's aim lock (Lock On Enemy): her aim stance chose a target (the auto-aim). Until it ends the camera
+    // stays aimed at the target, keeps the shoulder side it had when the lock began and never pulls back. When it ends
+    // the camera turns back behind her, on the same side and at the same distance.
+    wasLocked = s.locked;
+    if (!cfg.lockOnEnemy) {
+        lock_release();
+    } else if (mc_view_slot() == mc_player_slot() && mc_aim_target(&lockPos)) {
         if (!s.locked) {
             s.locked = 1;
             s.lockSide = s.shoulderTarget;
             s.haveLockYaw = 0;
             s.haveLockDist = 0;
+            s.lockReturn = 0;
             evt("[evt] aim lock: on", 0, 0);
         }
         s.lockMiss = 0;
@@ -793,6 +815,10 @@ static void driver_frame(void) {
         lockPos = s.lockPos; // a short gap: the lock holds where it was
     } else {
         lock_release();
+    }
+    if (wasLocked && !s.locked) {
+        s.lockReturn = 1;
+        s.lookOff = 0.0f; // the camera heads for directly behind her
     }
     if (s.locked) {
         s.shoulderTarget = s.lockSide;
@@ -871,6 +897,13 @@ static void driver_frame(void) {
         evt("[evt] alt view:", 1, (s32)s.altView);
     }
     inputMoving = mc_absf(lx) > 0.1f || mc_absf(ly) > 0.1f;
+    // The player moves her: the camera device's movement (stick, d-pad, W/A/S/D) or the game's own movement actions for
+    // her, whichever device the game is played with.
+    if (inputMoving || mc_player_move_held()) {
+        s.moveIdle = 0.0f;
+    } else {
+        s.moveIdle += dt;
+    }
 
     // ---- Aim
     aiming = (held & REO_CAM_ACT_AIM) != 0;
@@ -895,6 +928,15 @@ static void driver_frame(void) {
     // ---- The followed character (the local player, or the watched one)
     mc_view_pos(&px, &py, &pz);
     playerYaw = mc_view_yaw_deg();
+    if (!s.locked && s.havePrevPos && mc_hypotf(px - s.prevPx, pz - s.prevPz) > MC_RELOCATE_DIST) {
+        // The game put her somewhere else (a scripted scene): the boom starts again at its distance and the walls
+        // there pull it in at once.
+        s.camT = 1.0f;
+        s.boomReturn = 0;
+    }
+    s.havePrevPos = 1;
+    s.prevPx = px;
+    s.prevPz = pz;
 
     // ---- Did the engine take the camera back? (doors, scripted shots)
     if (check_camera_taken(&cfg)) {
@@ -1091,6 +1133,15 @@ static void driver_frame(void) {
     behind = cfg.followBehind ? 180.0f : 0.0f;
     s.follow.moveHold = mc_maxf(0.0f, cfg.followHold);
     active = mc_follow_update(&s.follow, px, pz, playerYaw, dt, inputMoving, aimingNow, &baseYaw);
+    playerActs = 1; // watching another player: the follow and the boom as before
+    if (mc_view_slot() == mc_player_slot()) {
+        // Outside the aim lock her camera stays on her: it turns only with the player - the look, Recenter, and with
+        // Keep Behind Character her facing while the player moves her (and Follow Hold after the last move). A
+        // knockback, a hit, the recoil or the game's auto-aim turning or pushing her never swings it.
+        playerActs = s.moveIdle <= mc_maxf(0.0f, cfg.followHold);
+        active = playerActs;
+        baseYaw = playerYaw;
+    }
     aimSteer = (aiming || aimingNow) && cfg.modernAim;
     steering = cfg.turnToCamera != MC_TURN_OFF || aimSteer;
     if (s.locked) {
@@ -1115,6 +1166,17 @@ static void driver_frame(void) {
             s.pitch = mc_lerp(s.pitch, 0.0f, mc_minf(1.0f, dt * 15.0f));
         }
     } else {
+        if (s.lockReturn) {
+            // The lock has ended: the camera turns back behind her as fast as the lock turned onto its target; the
+            // player's own look takes over at once.
+            f32 back = mc_angwrap(playerYaw + behind + cfg.yawOffset - s.camYaw);
+
+            if (looking || mc_absf(back) < 0.5f) {
+                s.lockReturn = 0;
+            } else {
+                s.camYaw += back * mc_smooth_alpha(MC_LOCK_TURN, dt);
+            }
+        }
         if (!looking && !(aimingNow && cfg.aimFreeLook) && cfg.keepBehind) {
             mc_release_free_look(&s.camYaw, &s.lookOff, dt, cfg.freeLookReturn);
         }
@@ -1165,6 +1227,13 @@ static void driver_frame(void) {
         }
         s.lockDist = eff.distance;
         s.haveLockDist = 1;
+    } else if (s.haveLockDist) {
+        // The lock has just ended: a longer distance does not pull the camera back. The boom keeps the lock's length
+        // and grows back like after a wall (when the player moves her or the camera).
+        if (eff.distance > s.lockDist && eff.distance > 0.0f) {
+            s.camT = mc_minf(s.camT, s.camT * s.lockDist / eff.distance);
+        }
+        s.haveLockDist = 0;
     }
     eff.lookDrop *= 1.0f - s.aimAmt;
     mag = mc_absf(eff.shoulder);
@@ -1201,16 +1270,29 @@ static void driver_frame(void) {
         } else {
             s.camHoldTimer = mc_maxf(0.0f, s.camHoldTimer - dt);
         }
+        if (s.locked) {
+            s.boomReturn = 0; // the aim lock never lets it grow back, nor does its end
+        } else if (tHit > s.camT && (playerActs || looking)) {
+            s.boomReturn = 1; // the player moved her or the camera and the wall cleared: it may return to its distance
+        }
         if (tHit < s.camT) {
             if (cfg.camSnap > 0.0f) {
                 s.camT += (tHit - s.camT) * mc_smooth_alpha(mc_clampf(cfg.camSnap, 0.5f, 1.0f), dt);
             } else {
                 s.camT = tHit;
             }
-        } else if (s.camHoldTimer > 0.0f || s.locked) {
-            // hold the pulled-in boom (the aim lock: until it ends)
+            s.boomReturn = 0;
+        } else if (s.camHoldTimer > 0.0f || s.locked || !s.boomReturn) {
+            // hold the pulled-in boom (the aim lock: until it ends; otherwise until the player opens the space: it
+            // never pulls back by itself)
+            if (!playerActs && !looking) {
+                s.boomReturn = 0; // a return the player started and a wall stopped does not resume later by itself
+            }
         } else {
             s.camT += (tHit - s.camT) * mc_smooth_alpha(mc_maxf(0.02f, cfg.camRecover), dt);
+            if (tHit - s.camT < 0.001f) {
+                s.boomReturn = 0; // back at its distance, or as far as the walls let it
+            }
         }
         if (s.camT < 0.999f) {
             f32 ey2 = look.y + (eye.y - look.y) * s.camT;

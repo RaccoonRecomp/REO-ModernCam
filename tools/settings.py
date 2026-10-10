@@ -105,6 +105,9 @@ S = [
       tab="Aiming", group="Aiming"),
     N("gun_pitch_max", "Gun Elevation", 45, 5, 45, 1, 0, "How far up and down the gun can point, in degrees.",
       tab="Aiming", group="Aiming"),
+    B("lock_on_enemy", "Lock On Enemy", True,
+      "While you aim, the camera turns onto the enemy the game locks onto and follows it; your character faces it; "
+      "the shoulder side and the distance stay.", tab="Aiming", group="Aiming"),
     B("crosshair", "Crosshair", True, "Show a crosshair while aiming (drawn by REO over the game picture).",
       tab="Aiming", group="Reticle"),
     C("crosshair_style", "Crosshair Shape", ["Dot", "Cross"], "Dot", "", tab="Aiming", group="Reticle"),

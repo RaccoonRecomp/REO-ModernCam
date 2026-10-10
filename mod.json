@@ -1,7 +1,7 @@
 {
   "id": "reo-modern-camera",
   "name": "Resident Evil Outbreak — Modern Camera",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "author": "RaccoonRecomp",
   "authors": [
     "Snippy (Outbreak ModernCam)"
@@ -342,6 +342,13 @@
       "max": 45,
       "label": "Gun Elevation",
       "description": "How far up and down the gun can point, in degrees."
+    },
+    {
+      "key": "lock_on_enemy",
+      "type": "boolean",
+      "default": true,
+      "label": "Lock On Enemy",
+      "description": "While you aim, the camera turns onto the enemy the game locks onto and follows it; your character faces it; the shoulder side and the distance stay."
     },
     {
       "key": "crosshair",

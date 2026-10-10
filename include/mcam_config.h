@@ -64,6 +64,7 @@ typedef struct {
     f32 aimSnapSpeed;
     f32 aimShoulderMin;
     f32 modernAimDeadzone;
+    u32 lockOnEnemy;
 
     // Crosshair (drawn by the host)
     u32 crosshair;

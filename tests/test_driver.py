@@ -470,7 +470,13 @@ check(boom5 < boom * 0.5, "boom pulled in from %.0f to %.0f" % (boom, boom5))
 m.ee_set_u32(WALL_PTR, 0)
 g.frame(60)
 e6, t6 = g.eye(), g.tgt()
-check(math.hypot(e6[0] - t6[0], e6[2] - t6[2]) > boom * 0.9, "boom recovers when the wall is gone")
+check(math.hypot(e6[0] - t6[0], e6[2] - t6[2]) < boom5 + 0.5, "wall gone: the boom does not pull back by itself")
+m.ee_set_u32(CHAR + 0xF80, 0x1)  # the player moves her (the game's forward action)
+g.frame(60)
+m.ee_set_u32(CHAR + 0xF80, 0)
+e6, t6 = g.eye(), g.tgt()
+b6 = math.hypot(e6[0] - t6[0], e6[2] - t6[2])
+check(boom * 0.9 < b6 < boom + 0.5, "the player moves her: the boom returns to its distance %.0f, never further" % b6)
 
 print("== 7. cut matching forces the nearest authored cut")
 m.ee[CUT + 1] = 2
@@ -1005,13 +1011,21 @@ m.ee[CHAR + 0x08] = 3
 g.frame(20)
 check(abs(angwrap(view_yaw(g) - to_target(g, ex, ez))) < 2.0 and g.boom() <= b_in + 0.5,
       "hit while aiming (stance 3): still on the target, still %.0f" % g.boom())
-# the aim is let go: the lock ends after its short grace; the camera is free again and the boom recovers
+# the aim is let go: the lock ends after its short grace; the camera turns back behind her, on its side, at its length
+# (no pull-back); the boom returns to its distance when the player moves her
+v_end = view_yaw(g)
 m.ee[CHAR + 0x08] = 1
 m.ee_set_u32(CHAR + 0xF80, 0)
 g.host.held = 0
 g.frame(90)
-check(any("aim lock: released" in s for s in g.host.logs) and g.boom() > b_lock * 0.9,
-      "aim let go: lock released, the boom recovers (%.0f)" % g.boom())
+check(any("aim lock: released" in s for s in g.host.logs) and abs(angwrap(view_yaw(g) - g.heading)) < 1.0 and
+      g.boom() <= b_in + 0.5 and boom_side(g, g.tgt()) * side0 > 0,
+      "aim let go: lock released, the camera back behind her (view %.1f -> %.1f, facing %.1f), same side, no "
+      "pull-back (%.0f)" % (v_end, view_yaw(g), g.heading, g.boom()))
+m.ee_set_u32(CHAR + 0xF80, 0x1)
+g.frame(60)
+m.ee_set_u32(CHAR + 0xF80, 0)
+check(g.boom() > b_lock * 0.9, "the player moves her: the boom returns to its distance (%.0f)" % g.boom())
 v0 = view_yaw(g)
 g.host.rx = 1.0
 g.frame(10)
@@ -1027,11 +1041,18 @@ b1 = g.boom()
 g.frame(40)
 check(g.boom() <= b1 + 0.5 and g.boom() < 480,
       "locked while a longer aim distance blends in: the boom stays %.0f (not %d)" % (g.boom(), 495))
-# an enemy the game can no longer target (+0xC94 bit 0) ends the lock
+# an enemy the game can no longer target (+0xC94 bit 0) ends the lock; the camera does not pull back to the longer
+# aim distance by itself
 m.ee_set_u32(ENEMY + 0xC94, 1)
+b_rel = g.boom()
 g.frame(10)
-check(g.boom() > 400, "the target can no longer be targeted: lock released, the aim distance applies (%.0f)"
-      % g.boom())
+check(any(s.endswith("aim lock: released") for s in g.host.logs[-3:]) and g.boom() <= b_rel + 0.5,
+      "the target can no longer be targeted: lock released, the boom stays %.0f (no pull-back to %d)"
+      % (g.boom(), 495))
+m.ee_set_u32(CHAR + 0xF80, 0x1)
+g.frame(60)
+m.ee_set_u32(CHAR + 0xF80, 0)
+check(g.boom() > 480, "the player moves her: the aim distance applies (%.0f)" % g.boom())
 # no target (+0x24 = 0): Modern Aim as before, the camera stays where it is
 m.config["aim_distance_set"] = 0
 m.ee_set_u32(CHAR + 0x24, 0)
@@ -1039,6 +1060,90 @@ g.frame(10)
 v1 = view_yaw(g)
 g.frame(20)
 check(abs(angwrap(view_yaw(g) - v1)) < 0.5, "aiming without a target: the camera does not move by itself")
+check(not code_touched(m), "no game code read or written")
+
+print("== 28. the camera stays on her: no swing by itself, the side stays, no pull-back; Lock On Enemy off")
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+m.config["rotate_mode"] = 1  # Keep Behind Character, as the owner plays
+m.config["debug_log"] = 1
+g.frame(30)
+v0, side0, b0 = view_yaw(g), boom_side(g, g.tgt()), g.boom()
+# a knockback: the game pushes her back 120 units over 12 frames (no input)
+h = math.radians(g.heading)
+for k in range(12):
+    g.px -= 10.0 * math.sin(h)
+    g.pz -= 10.0 * math.cos(h)
+    g.frame(1)
+g.frame(30)
+check(abs(angwrap(view_yaw(g) - v0)) < 0.5, "a knockback does not swing it (view %.1f -> %.1f)" % (v0, view_yaw(g)))
+# the game turns her (a hit, the auto-aim) without the player: the camera stays
+g.heading += 70.0
+g.frame(40)
+check(abs(angwrap(view_yaw(g) - v0)) < 0.5, "the game turns her: the camera stays (view %.1f)" % view_yaw(g))
+check(boom_side(g, g.tgt()) * side0 > 0 and abs(g.boom() - b0) < 0.5,
+      "the side stays (%.0f) and the distance stays (%.0f)" % (boom_side(g, g.tgt()), g.boom()))
+# the player turns her (the game's turn action held): with Keep Behind the camera follows her facing
+m.ee_set_u32(CHAR + 0xF80, 0x8)
+for k in range(20):
+    g.heading += 3.0
+    g.frame(1)
+g.frame(60)
+m.ee_set_u32(CHAR + 0xF80, 0)
+check(abs(angwrap(view_yaw(g) - g.heading)) < 3.0,
+      "the player turns her: Keep Behind brings it behind her (view %.1f, facing %.1f)" % (view_yaw(g), g.heading))
+check(g.boom() < 300.5, "never further than its distance (%.0f)" % g.boom())
+# a wall pulls the boom in and goes; the game pushes her (no input): it stays in; the game puts her somewhere else (a
+# scripted scene): the boom settles at its distance there, never further
+g.frame(10)  # the player's last move is past Follow Hold
+wall_across_boom(m, g)
+g.frame(3)
+b_w = g.boom()
+m.ee_set_u32(WALL_PTR, 0)
+h = math.radians(g.heading)
+for k in range(6):
+    g.px += 6.0 * math.sin(h)
+    g.pz += 6.0 * math.cos(h)
+    g.frame(1)
+g.frame(40)
+check(b_w < 200 and g.boom() <= b_w + 0.5, "wall gone, the game pushes her: no pull-back by itself (%.0f -> %.0f)"
+      % (b_w, g.boom()))
+g.px += 300.0
+g.frame(60)
+check(290 < g.boom() < 300.5, "the game puts her elsewhere: the boom settles at its distance (%.0f)" % g.boom())
+# Lock On Enemy off: an aim lock of the game does not move the camera; Modern Aim turns her to the camera's view
+m.config["lock_on_enemy"] = 0
+m.config["rotate_mode"] = 0
+g.frame(5)
+ex = g.px + 400.0 * math.sin(math.radians(g.heading - 90.0))
+ez = g.pz + 400.0 * math.cos(math.radians(g.heading - 90.0))
+v1 = view_yaw(g)
+logs = len(g.host.logs)
+g.host.held = AIM
+stage_lock(m, ex, ez)
+g.heading = to_target(g, ex, ez)  # the game snaps her to its target
+g.frame(40)
+check(abs(angwrap(view_yaw(g) - v1)) < 0.5 and not any("aim lock" in s for s in g.host.logs[logs:]),
+      "Lock On Enemy off: the camera stays on her (view %.1f -> %.1f), no lock" % (v1, view_yaw(g)))
+check(abs(angwrap(g.heading - view_yaw(g))) <= 12.5,
+      "Lock On Enemy off: Modern Aim turns her to where the camera looks, as in 2.0.0 (facing %.1f, view %.1f)"
+      % (g.heading, view_yaw(g)))
+# switched on while the game holds the lock: the camera turns onto the target
+m.config["lock_on_enemy"] = 1
+g.frame(20)
+check(abs(angwrap(view_yaw(g) - to_target(g, ex, ez))) < 2.0,
+      "Lock On Enemy on: the camera turns onto the target (view %.1f, target %.1f)"
+      % (view_yaw(g), to_target(g, ex, ez)))
+m.config["lock_on_enemy"] = 0
+v2 = view_yaw(g)
+g.frame(20)
+check(any(s.endswith("aim lock: released") for s in g.host.logs) and abs(angwrap(view_yaw(g) - g.heading)) < 2.0,
+      "switched off during a lock: released, the camera back behind her (view %.1f -> %.1f, facing %.1f)"
+      % (v2, view_yaw(g), g.heading))
+g.host.held = 0
+m.ee[CHAR + 0x08] = 1
+m.ee_set_u32(CHAR + 0xF80, 0)
 check(not code_touched(m), "no game code read or written")
 
 print("== 26. cost: MIPS instructions per game frame")

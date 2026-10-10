@@ -179,6 +179,10 @@ u32 mc_aim_target(Mc_Vec3* pos) {
     return Mc_IsSaneF32(pos->x) && Mc_IsSaneF32(pos->y) && Mc_IsSaneF32(pos->z);
 }
 
+u32 mc_player_move_held(void) {
+    return (Mc_ReadU32(mc_char_base(sPlayerSlot) + REO_CHAR_ACT + 8) & REO_ACT_MOVE) != 0;
+}
+
 u32 mc_busy_with_action(void) {
     return Mc_ReadU8(mc_char_base(sPlayerSlot) + REO_CHAR_SUBSTATE) == 0x40;
 }

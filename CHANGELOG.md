@@ -1,17 +1,24 @@
 # Changelog
 
-## 2.0.1
+## 2.1.0
 
-- **Aim lock**: while she aims and the game has locked onto an enemy (its auto-aim: the target it chose when she raised
-  the weapon, held while the aim button is held, also through a hit), the camera turns onto that enemy and stays on it
-  as it moves; Modern Aim turns her to the enemy, not away from it; the camera keeps the shoulder side it had when the
-  lock began (Swap Shoulder does nothing until the lock ends) and does not pull back (walls can still pull it in). The
-  lock ends when the aim is let go or the game can no longer target that enemy; then the camera behaves as before.
-- Why: in 2.0.0 Modern Aim turned her from the enemy the game had locked onto toward wherever the camera looked
-  (unless the camera already pointed within the Aim Turn Deadzone of it), the camera never followed the enemy, with
-  Keep Behind Character it swung after her steps while she aimed with the game's own aim button, and after a wall
-  pulled it in it pulled back out during the fight.
-- No setting is added or changed. `patches.json` is unchanged.
+- **The camera stays on your character**: it no longer shifts by itself. It turns only when you turn it (right stick /
+  mouse, Recenter) and, with Keep Behind Character, with her facing while you move her (and back after a free look, as
+  before) - a knockback, a hit, the recoil of a shot or the game's auto-aim turning or pushing her no longer swing it.
+  It keeps its shoulder side (only Swap Shoulder changes it) and it does not pull back: a wall can still bring it
+  closer, and it goes back to its distance when you move her or the camera, never further and never by itself.
+- **Lock On Enemy** (new setting, Aiming tab, on by default): while she aims and the game has locked onto an enemy (its
+  auto-aim: the target it chose when she raised the weapon, held while the aim button is held, also through a hit),
+  the camera turns onto that enemy and stays on it as it moves; Modern Aim turns her to the enemy, not away from it;
+  the camera keeps the shoulder side it had when the lock began (Swap Shoulder does nothing until the lock ends) and
+  does not pull back (walls can still pull it in). The lock ends when the aim is let go or the game can no longer
+  target that enemy; the camera then turns back behind her, on the same side and at the same distance. Off: no enemy
+  follow; while she aims the camera stays on her as everywhere else and Modern Aim works as in 2.0.0.
+- Why: in 2.0.0, with Keep Behind Character, the camera followed the direction she was moving in, so knockbacks, hits
+  and recoil swung it around (also while she aimed with the game's own aim button), and after a wall pulled it in it
+  pulled back out during the fight; Modern Aim turned her from the enemy the game had locked onto toward wherever the
+  camera looked, and the camera never followed the enemy.
+- One setting added (Lock On Enemy, 117 settings). `patches.json` is unchanged.
 
 ## 2.0.0
 

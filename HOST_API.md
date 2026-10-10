@@ -1,6 +1,6 @@
 # REO_ModernCam v2: the host API it imports
 
-This is the contract between the Modern Camera mod (`build/mod.elf` / `REO_ModernCam.nrm`, v2.0.1) and the parts of
+This is the contract between the Modern Camera mod (`build/mod.elf` / `REO_ModernCam.nrm`, v2.1.0) and the parts of
 Resident Evil Outbreak Recompiled that run it: the sandboxed mod runtime, the camera's host services and the live
 settings window. The mod side of the same contract is `include/reo_host.h`. The fake host in `tests/test_driver.py`
 implements every function below and is the reference for its behaviour.
@@ -76,7 +76,7 @@ All of them are called on the game thread, from inside the two events.
 
 ### 4.1 Settings (N64Recomp's config API)
 The mod reads every setting every frame, so the window's changes apply at the next game frame, as the exe re-read
-`ro_settings.json`. The keys and types are those of `mod.toml` and `mod.json` (116 settings, generated from
+`ro_settings.json`. The keys and types are those of `mod.toml` and `mod.json` (117 settings, generated from
 `tools/settings.py`).
 
 | Setting type (`mod.json`) | `recomp_get_config_u32` | `recomp_get_config_double` |
