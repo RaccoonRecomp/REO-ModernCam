@@ -125,6 +125,10 @@
 #define REO_CUT_FOV       0x14
 #define REO_CUT_EYE       0xA0
 #define REO_CUT_TARGET    0xB8
+// The room objects a cut draws: 4 words, bit i = object i. At every cut change the dispatcher sets bit 0 of each
+// object's flag byte (REO_US_OBJ_FLAGS) from the new cut's mask (game.bin 0x005BEF3C, after it stores +3).
+#define REO_CUT_MASK       0x154
+#define REO_CUT_MASK_WORDS 4
 
 // ---- Objects, walls, near-camera hide radii -----------------------------------------------------
 // u8 per room object, bit 0 = visible; game.bin indexes it from 0x00690614 on. [0x00470930]

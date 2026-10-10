@@ -18,6 +18,12 @@
   and recoil swung it around (also while she aimed with the game's own aim button), and after a wall pulled it in it
   pulled back out during the fight; Modern Aim turned her from the enemy the game had locked onto toward wherever the
   camera looked, and the camera never followed the enemy.
+- **Walls and pictures stay**: what one of the room's fixed cameras leaves out (the wall it looks through, the
+  pictures on that wall, a light next to its lens) stays drawn while the camera drives, also at a cut change. Before,
+  the game still picked its fixed camera from her position and hid those objects from the free view: J's Bar's
+  restroom showed a black far wall without its framed poster, the Jack's Bar sign lost its glowing frame, The Hive's
+  corridors lost their ceilings. Objects no fixed camera of the room draws and what the game's events hide stay as the
+  game has them (Show Hidden Objects still shows the former). No setting.
 - One setting added (Lock On Enemy, 117 settings). `patches.json` is unchanged.
 
 ## 2.0.0

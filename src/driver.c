@@ -327,6 +327,7 @@ static void hand_back_all(void) {
     }
     release_reload();
     lock_release();
+    mc_restore_artwork();
     unfreeze(s.levelLive);
     mc_feature(MC_FEAT_FREEZE, 0);
     s.levelLive = 0;
@@ -436,6 +437,7 @@ static u32 check_camera_taken(const Mc_Config* cfg) {
             }
             mc_restore_near_hide();
             s.nearScale = 1.0f;
+            mc_restore_artwork();
             s.cutForced = s.cutCand = -1;
             s.haveLastWritten = 0;
             s.haveSteerYaw = 0;
@@ -718,6 +720,7 @@ static void driver_frame(void) {
             mc_walls_invalidate();
             release_reload();
             lock_release();
+            mc_restore_artwork();
             s.levelLive = 0;
             mc_set_view_slot(mc_player_slot());
             evt("[evt] no level: idling, camera and pad handed back", 0, 0);
@@ -1332,6 +1335,14 @@ static void driver_frame(void) {
 
     // ---- Write the camera
     mc_write_camera(&eye, &look);
+
+    // ---- The room's walls and pictures a fixed camera leaves out stay drawn in our view (the reveal camera at the
+    // room's own camera shows the game's)
+    if (s.revealT >= 1.0f) {
+        mc_keep_artwork();
+    } else {
+        mc_restore_artwork();
+    }
 
     // ---- Borrow the room cut nearest our eye, so visibility and culling match what we show
     cut_match(&cfg, &eye);

@@ -67,6 +67,11 @@ void mc_release_cut(void);
 
 // ---- Visibility and lighting ------------------------------------------------------------------------------------
 u32 mc_show_all_objects(void);
+// The room's walls and pictures a fixed camera leaves out: while the camera drives, every cut's object mask also holds
+// what the room's other cuts draw (the game's own cut change keeps them drawn); restore puts the game's masks and the
+// current cut's objects back (not when a new room's masks are in memory: those are the game's).
+void mc_keep_artwork(void);
+void mc_restore_artwork(void);
 // The near-camera hide radii (reo_camera_us.h): scaled from the originals, never above them.
 void mc_set_near_hide_scale(f32 scale);
 void mc_restore_near_hide(void);

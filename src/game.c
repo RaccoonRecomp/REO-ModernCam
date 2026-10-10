@@ -344,6 +344,113 @@ u32 mc_show_all_objects(void) {
     return changed;
 }
 
+// Each of the room's fixed cameras (cuts) draws only the objects of its mask. A cut leaves out what stands between its
+// lens and the room (the wall it looks through, the pictures on that wall, a bulb next to the lens), and the cut still
+// follows her position while the camera drives: those walls and pictures were missing in the view (J's Bar's restroom:
+// the far wall and its framed poster, black). Objects no cut draws and an event's hide (flag bit 7) stay the game's.
+#define MC_MAX_ROOM_CUTS 64 // as mc_cut_count
+static u32 sArtOn = 0;
+static u32 sArtCuts, sArtWords;
+static u32 sArtAdd[REO_CUT_MASK_WORDS];               // the objects of any cut of the room
+static u32 sArtOrig[MC_MAX_ROOM_CUTS][REO_CUT_MASK_WORDS];
+
+static u32 art_mask_addr(u32 cut, u32 w) {
+    return REO_US_CUT_HEADER + REO_CUT_RECORDS + cut * REO_CUT_STRIDE + REO_CUT_MASK + 4 * w;
+}
+
+// The room's masks are still the ones written (the same room).
+static u32 art_ours(void) {
+    u32 c, w;
+
+    if (Mc_ReadU8(REO_US_CUT_HEADER + REO_CUT_COUNT) != sArtCuts ||
+        (Mc_ReadU16(REO_US_OBJ_COUNT) + 31) / 32 != sArtWords) {
+        return 0;
+    }
+    for (c = 0; c < sArtCuts; c++) {
+        for (w = 0; w < sArtWords; w++) {
+            if (Mc_ReadU32(art_mask_addr(c, w)) != (sArtOrig[c][w] | sArtAdd[w])) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+// Bit 0 of the objects the current cut's own mask leaves out (and another cut draws): set or cleared.
+static void art_current(u32 show) {
+    u32 cur = Mc_ReadU8(REO_US_CUT_HEADER + REO_CUT_CURRENT);
+    u32 count = Mc_ReadU16(REO_US_OBJ_COUNT);
+    u32 i, f;
+
+    if (cur >= sArtCuts) {
+        return;
+    }
+    for (i = 0; i < count; i++) {
+        if ((sArtAdd[i >> 5] & ~sArtOrig[cur][i >> 5]) >> (i & 31) & 1) {
+            f = Mc_ReadU8(REO_US_OBJ_FLAGS + i);
+            if ((f & 1) != show) {
+                Mc_WriteU8(REO_US_OBJ_FLAGS + i, show ? (f | 1) : (f & ~1u));
+            }
+        }
+    }
+}
+
+void mc_keep_artwork(void) {
+    u32 n = Mc_ReadU8(REO_US_CUT_HEADER + REO_CUT_COUNT);
+    u32 count = Mc_ReadU16(REO_US_OBJ_COUNT);
+    u32 c, w;
+
+    if (sArtOn && art_ours()) {
+        return;
+    }
+    sArtOn = 0;
+    if (n == 0 || n > MC_MAX_ROOM_CUTS || count == 0 || count > 32 * REO_CUT_MASK_WORDS) {
+        return;
+    }
+    sArtCuts = n;
+    sArtWords = (count + 31) / 32;
+    for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
+        sArtAdd[w] = 0;
+    }
+    for (c = 0; c < n; c++) {
+        for (w = 0; w < sArtWords; w++) {
+            sArtOrig[c][w] = Mc_ReadU32(art_mask_addr(c, w));
+            sArtAdd[w] |= sArtOrig[c][w];
+        }
+    }
+    if (count & 31) {
+        sArtAdd[sArtWords - 1] &= (1u << (count & 31)) - 1;
+    }
+    for (c = 0; c < n; c++) {
+        for (w = 0; w < sArtWords; w++) {
+            if (sArtAdd[w] & ~sArtOrig[c][w]) {
+                Mc_WriteU32(art_mask_addr(c, w), sArtOrig[c][w] | sArtAdd[w]);
+            }
+        }
+    }
+    sArtOn = 1;
+    art_current(1); // (the current cut was set with the game's mask)
+}
+
+void mc_restore_artwork(void) {
+    u32 c, w;
+
+    if (!sArtOn) {
+        return;
+    }
+    if (art_ours()) {
+        for (c = 0; c < sArtCuts; c++) {
+            for (w = 0; w < sArtWords; w++) {
+                if (sArtAdd[w] & ~sArtOrig[c][w]) {
+                    Mc_WriteU32(art_mask_addr(c, w), sArtOrig[c][w]);
+                }
+            }
+        }
+        art_current(0);
+    }
+    sArtOn = 0;
+}
+
 static u32 sHaveCull = 0;
 static f32 sCullOrig[REO_US_CULL_COUNT];
 

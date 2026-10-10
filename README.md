@@ -85,7 +85,8 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
   stick while the camera uses it (not on keyboard and mouse).
 - **Collision** against the room's walls, with ModernCam's pull-in, hold and recover.
 - **Room cuts**: Match Room Cuts borrows the room's own camera nearest your view, so the game draws what that view
-  needs; Show Hidden Objects; Draw Distance; Character Light.
+  needs; Show Hidden Objects; Draw Distance; Character Light. The walls and pictures a fixed camera of the room leaves
+  out (the wall it looks through, the pictures on it) stay drawn while the camera drives.
 - **Doors and cutscenes**: the camera gives way when the game moves it, and can yield during cutscenes and come back
   when you move.
 
