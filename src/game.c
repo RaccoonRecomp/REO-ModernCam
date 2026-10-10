@@ -347,15 +347,81 @@ u32 mc_show_all_objects(void) {
 // Each of the room's fixed cameras (cuts) draws only the objects of its mask. A cut leaves out what stands between its
 // lens and the room (the wall it looks through, the pictures on that wall, a bulb next to the lens), and the cut still
 // follows her position while the camera drives: those walls and pictures were missing in the view (J's Bar's restroom:
-// the far wall and its framed poster, black). Objects no cut draws and an event's hide (flag bit 7) stay the game's.
-#define MC_MAX_ROOM_CUTS 64 // as mc_cut_count
+// the far wall and its framed poster, black). Every cut's mask also holds the objects the cuts that look at them draw.
+// An object every cut that looks at it leaves out stays out (the restroom's vent grille: the vent is open, its grille
+// lies on the floor); so do objects no cut draws and an event's hide (flag bit 7).
+#define MC_MAX_ROOM_CUTS 64      // as mc_cut_count
+#define MC_ART_MARGIN_TAN 0.267949f // a cut "looks at" an object whose origin is within its field of view + 15 degrees
 static u32 sArtOn = 0;
 static u32 sArtCuts, sArtWords;
-static u32 sArtAdd[REO_CUT_MASK_WORDS];               // the objects of any cut of the room
+static u32 sArtAdd[REO_CUT_MASK_WORDS];               // what every cut also draws
 static u32 sArtOrig[MC_MAX_ROOM_CUTS][REO_CUT_MASK_WORDS];
+
+// A cut's camera: eye, axes and the tangents of its half fields of view (+ the margin; 0 = no limit).
+typedef struct {
+    u32 ok;
+    Mc_Vec3 eye, fw, rt, up;
+    f32 tx, ty;
+} Mc_ArtCam;
+static Mc_ArtCam sArtCam[MC_MAX_ROOM_CUTS];
 
 static u32 art_mask_addr(u32 cut, u32 w) {
     return REO_US_CUT_HEADER + REO_CUT_RECORDS + cut * REO_CUT_STRIDE + REO_CUT_MASK + 4 * w;
+}
+
+static f32 art_tan_add(f32 a, f32 b) {
+    f32 d = 1.0f - a * b;
+
+    return d > 0.01f ? (a + b) / d : 0.0f;
+}
+
+static void art_cam(u32 cut, Mc_ArtCam* k) {
+    u32 rec = REO_US_CUT_HEADER + REO_CUT_RECORDS + cut * REO_CUT_STRIDE;
+    Mc_Vec3 tgt;
+    f32 fov = Mc_ReadF32(rec + REO_CUT_FOV);
+    f32 l, tv;
+
+    read_ivec(rec + REO_CUT_EYE, &k->eye);
+    read_ivec(rec + REO_CUT_TARGET, &tgt);
+    if (!Mc_IsSaneF32(fov) || fov < 1.0f || fov > 170.0f) {
+        fov = 60.0f;
+    }
+    k->fw.x = tgt.x - k->eye.x;
+    k->fw.y = tgt.y - k->eye.y;
+    k->fw.z = tgt.z - k->eye.z;
+    l = mc_sqrtf(k->fw.x * k->fw.x + k->fw.y * k->fw.y + k->fw.z * k->fw.z);
+    k->ok = l > 1e-3f;
+    if (!k->ok) {
+        return;
+    }
+    k->fw.x /= l;
+    k->fw.y /= l;
+    k->fw.z /= l;
+    l = mc_hypotf(k->fw.z, k->fw.x);
+    k->rt.x = l > 1e-4f ? k->fw.z / l : 1.0f;
+    k->rt.y = 0.0f;
+    k->rt.z = l > 1e-4f ? -k->fw.x / l : 0.0f;
+    k->up.x = k->rt.y * k->fw.z - k->rt.z * k->fw.y;
+    k->up.y = k->rt.z * k->fw.x - k->rt.x * k->fw.z;
+    k->up.z = k->rt.x * k->fw.y - k->rt.y * k->fw.x;
+    fov *= 0.5f * MC_DEG2RAD;
+    tv = mc_sinf(fov) / mc_cosf(fov);
+    k->ty = art_tan_add(tv, MC_ART_MARGIN_TAN);
+    k->tx = art_tan_add(tv * (4.0f / 3.0f), MC_ART_MARGIN_TAN);
+}
+
+static u32 art_seen(const Mc_ArtCam* k, const Mc_Vec3* p) {
+    f32 rx = p->x - k->eye.x;
+    f32 ry = p->y - k->eye.y;
+    f32 rz = p->z - k->eye.z;
+    f32 z = rx * k->fw.x + ry * k->fw.y + rz * k->fw.z;
+    f32 x = mc_absf(rx * k->rt.x + ry * k->rt.y + rz * k->rt.z);
+    f32 y = mc_absf(rx * k->up.x + ry * k->up.y + rz * k->up.z);
+
+    if (!(z > 0.0f)) {
+        return 0;
+    }
+    return (k->tx == 0.0f || x <= z * k->tx) && (k->ty == 0.0f || y <= z * k->ty);
 }
 
 // The room's masks are still the ones written (the same room).
@@ -398,7 +464,8 @@ static void art_current(u32 show) {
 void mc_keep_artwork(void) {
     u32 n = Mc_ReadU8(REO_US_CUT_HEADER + REO_CUT_COUNT);
     u32 count = Mc_ReadU16(REO_US_OBJ_COUNT);
-    u32 c, w;
+    u32 c, w, i, any, looked, drawn;
+    Mc_Vec3 p;
 
     if (sArtOn && art_ours()) {
         return;
@@ -409,17 +476,37 @@ void mc_keep_artwork(void) {
     }
     sArtCuts = n;
     sArtWords = (count + 31) / 32;
-    for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
-        sArtAdd[w] = 0;
-    }
     for (c = 0; c < n; c++) {
         for (w = 0; w < sArtWords; w++) {
             sArtOrig[c][w] = Mc_ReadU32(art_mask_addr(c, w));
-            sArtAdd[w] |= sArtOrig[c][w];
         }
+        art_cam(c, &sArtCam[c]);
     }
-    if (count & 31) {
-        sArtAdd[sArtWords - 1] &= (1u << (count & 31)) - 1;
+    // Per object: drawn by a cut that looks at it; one no cut looks at: drawn by any cut.
+    for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
+        sArtAdd[w] = 0;
+    }
+    for (i = 0; i < count; i++) {
+        u32 m = REO_US_OBJ_MATRIX + REO_OBJ_MATRIX_STRIDE * i + REO_OBJ_MATRIX_ORIGIN;
+        u32 sane;
+
+        p.x = Mc_ReadF32(m);
+        p.y = Mc_ReadF32(m + 4);
+        p.z = Mc_ReadF32(m + 8);
+        sane = Mc_IsSaneF32(p.x) && Mc_IsSaneF32(p.y) && Mc_IsSaneF32(p.z);
+        any = looked = drawn = 0;
+        for (c = 0; c < n; c++) {
+            u32 bit = (sArtOrig[c][i >> 5] >> (i & 31)) & 1;
+
+            any |= bit;
+            if (sArtCam[c].ok && sane && art_seen(&sArtCam[c], &p)) {
+                looked = 1;
+                drawn |= bit;
+            }
+        }
+        if (looked ? drawn : any) {
+            sArtAdd[i >> 5] |= 1u << (i & 31);
+        }
     }
     for (c = 0; c < n; c++) {
         for (w = 0; w < sArtWords; w++) {

@@ -135,6 +135,10 @@
 #define REO_US_OBJ_FLAGS 0x0049F790
 // u16 object count, 0x2E before the flags as on the Japanese disc (same +0x2EE60 shift). [0x00470902]
 #define REO_US_OBJ_COUNT 0x0049F762
+// f32 4x4 world matrix per room object (rows; the origin at +0x30).
+#define REO_US_OBJ_MATRIX      0x0049FA10
+#define REO_OBJ_MATRIX_STRIDE  0x40
+#define REO_OBJ_MATRIX_ORIGIN  0x30
 // u32 pointer to the room's wall records (0x38 bytes each), set by the room-collision loader
 // 0x006161E0. [WALL_PTRS file1 0x003938C4]
 #define REO_US_WALL_PTR  0x003C2724
