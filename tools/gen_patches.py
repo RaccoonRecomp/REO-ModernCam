@@ -17,8 +17,10 @@ The sites (Outbreak-ModernCam.exe's File 1 patches, moved to this disc; ro_code_
   the cut record's current eye, the spline lookups) keeps running, so the game's rail state is current when the
   camera hands back. The subtitle probes (camera_v2) show the ad-lib subtitles with either freeze.
 - camera.freeAim (settings "modern_aim" and "free_aim"): the gun-elevation servo calls and its four stores, as the exe.
-- marks: the game frame (recomp_on_play_main), the pad mapper (recomp_on_pad_map; the exe's VBTN cave) and the
-  per-character update where the reload's guest call runs (the exe's reload cave)."""
+- marks: the game frame (recomp_on_play_main), the pad mapper (recomp_on_pad_map; the exe's VBTN cave), the
+  per-character update where the reload's guest call runs (the exe's reload cave) and the room's draw loop where the
+  camera draws the restroom mirrors' reflection with the game's own functions (recomp_on_room_draw; no exe
+  equivalent)."""
 import json
 import os
 import struct
@@ -32,6 +34,7 @@ import us_image as us  # noqa: E402
 OUT = os.path.join(os.path.dirname(HERE), "patches.json")
 EXE_SHA256 = "sha256:06bd5fd7243144cd30cdd0c0023763a369738cb91b177b35e85f6a4782b4ca46"
 GAME_BIN = "xxh64:1b4bcbcfd81bd910"
+SUBMAIN = "xxh64:0203c44ed7180d75"  # BIN/0.DAT, loaded at 0x00370000 for the whole session
 JR_RA = 0x03E00008
 
 # (id, image, pc, kind, feature, original word, replacement, option, what)
@@ -107,6 +110,10 @@ MARKS = [
     ("camera.reload", "game.bin", 0x0066B500, 0x27BDFFE0, "camera.reload",
      "entry of the per-character update (a0 = the character record) [the exe's reload hook 0x006399A0]: the queued "
      "guest call of the item-combine routine 0x006690E0 runs here (reo_guest_call_at)"),
+    ("camera.roomDraw", "submain.bin", 0x00372284, 0x02711821, "camera.roomDraw",
+     "the room's draw loop 0x00372210, after a group's lighting (jal 0x006B2E20) and before its objects: "
+     "recomp_on_room_draw(s3 = the room, s1 = the group); the camera draws the restroom mirrors' reflection here "
+     "with the game's own functions (reo_guest_call)"),
 ]
 
 
@@ -155,7 +162,7 @@ def main():
                 "disc (tools/gen_patches.py). Merge with REOutbreakTools feature-profile build --mod-patches; never "
                 "commit. 'option' names the mod setting that switches the feature, 'note' what the site is.",
         "sources": ["Outbreak-ModernCam.exe 1.2.0 (Snippy) File 1 patches, ported to the US disc"],
-        "images": {"exe": EXE_SHA256, "game.bin": GAME_BIN},
+        "images": {"exe": EXE_SHA256, "game.bin": GAME_BIN, "submain.bin": SUBMAIN},
         "features": [
             {"name": "camera.freeze", "title": "Modern Camera: the game's camera held", "group": "Modern Camera",
              "description": "The game's camera handlers stop writing the camera (eye, target, FOV, roll); the Modern "

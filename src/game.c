@@ -349,12 +349,14 @@ u32 mc_show_all_objects(void) {
 // follows her position while the camera drives: those walls and pictures were missing in the view (J's Bar's restroom:
 // the far wall and its framed poster, black). Every cut's mask also holds the objects the cuts that look at them draw.
 // An object every cut that looks at it leaves out stays out (the restroom's vent grille: the vent is open, its grille
-// lies on the floor); so do objects no cut draws and an event's hide (flag bit 7).
+// lies on the floor); so do objects no cut draws and an event's hide (flag bit 7). Some objects no cut draws while the
+// camera drives (the drop: J's Bar's restroom, see the mirrors below).
 #define MC_MAX_ROOM_CUTS 64      // as mc_cut_count
 #define MC_ART_MARGIN_TAN 0.267949f // a cut "looks at" an object whose origin is within its field of view + 15 degrees
 static u32 sArtOn = 0;
 static u32 sArtCuts, sArtWords;
 static u32 sArtAdd[REO_CUT_MASK_WORDS];               // what every cut also draws
+static u32 sArtDrop[REO_CUT_MASK_WORDS];              // what no cut draws
 static u32 sArtOrig[MC_MAX_ROOM_CUTS][REO_CUT_MASK_WORDS];
 
 // A cut's camera: eye, axes and the tangents of its half fields of view (+ the margin; 0 = no limit).
@@ -424,6 +426,11 @@ static u32 art_seen(const Mc_ArtCam* k, const Mc_Vec3* p) {
     return (k->tx == 0.0f || x <= z * k->tx) && (k->ty == 0.0f || y <= z * k->ty);
 }
 
+// A cut's mask while the camera drives.
+static u32 art_mask(u32 c, u32 w) {
+    return (sArtOrig[c][w] | sArtAdd[w]) & ~sArtDrop[w];
+}
+
 // The room's masks are still the ones written (the same room).
 static u32 art_ours(void) {
     u32 c, w;
@@ -434,7 +441,7 @@ static u32 art_ours(void) {
     }
     for (c = 0; c < sArtCuts; c++) {
         for (w = 0; w < sArtWords; w++) {
-            if (Mc_ReadU32(art_mask_addr(c, w)) != (sArtOrig[c][w] | sArtAdd[w])) {
+            if (Mc_ReadU32(art_mask_addr(c, w)) != art_mask(c, w)) {
                 return 0;
             }
         }
@@ -442,32 +449,68 @@ static u32 art_ours(void) {
     return 1;
 }
 
-// Bit 0 of the objects the current cut's own mask leaves out (and another cut draws): set or cleared.
-static void art_current(u32 show) {
+// Bit 0 of the objects whose bit the camera's mask of the current cut changes (another cut draws it, or it is
+// dropped): as the camera's mask has it (ours), or as the game's has it.
+static void art_current(u32 ours) {
     u32 cur = Mc_ReadU8(REO_US_CUT_HEADER + REO_CUT_CURRENT);
     u32 count = Mc_ReadU16(REO_US_OBJ_COUNT);
-    u32 i, f;
+    u32 i, f, bit, game, mine, want;
 
     if (cur >= sArtCuts) {
         return;
     }
     for (i = 0; i < count; i++) {
-        if ((sArtAdd[i >> 5] & ~sArtOrig[cur][i >> 5]) >> (i & 31) & 1) {
-            f = Mc_ReadU8(REO_US_OBJ_FLAGS + i);
-            if ((f & 1) != show) {
-                Mc_WriteU8(REO_US_OBJ_FLAGS + i, show ? (f | 1) : (f & ~1u));
+        bit = 1u << (i & 31);
+        game = sArtOrig[cur][i >> 5] & bit;
+        mine = art_mask(cur, i >> 5) & bit;
+        if (mine == game) {
+            continue;
+        }
+        want = (ours ? mine : game) != 0;
+        f = Mc_ReadU8(REO_US_OBJ_FLAGS + i);
+        if ((f & 1) != want) {
+            Mc_WriteU8(REO_US_OBJ_FLAGS + i, want ? (f | 1) : (f & ~1u));
+        }
+    }
+}
+
+// Every cut's mask as the camera has it.
+static void art_write(void) {
+    u32 c, w;
+
+    for (c = 0; c < sArtCuts; c++) {
+        for (w = 0; w < sArtWords; w++) {
+            if (Mc_ReadU32(art_mask_addr(c, w)) != art_mask(c, w)) {
+                Mc_WriteU32(art_mask_addr(c, w), art_mask(c, w));
             }
         }
     }
 }
 
+static void mirror_drop(u32* drop);
+
 void mc_keep_artwork(void) {
     u32 n = Mc_ReadU8(REO_US_CUT_HEADER + REO_CUT_COUNT);
     u32 count = Mc_ReadU16(REO_US_OBJ_COUNT);
-    u32 c, w, i, any, looked, drawn;
+    u32 c, w, i, any, looked, drawn, same;
+    u32 drop[REO_CUT_MASK_WORDS];
     Mc_Vec3 p;
 
+    mirror_drop(drop);
     if (sArtOn && art_ours()) {
+        same = 1;
+        for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
+            same &= drop[w] == sArtDrop[w];
+        }
+        if (!same) {
+            // The same room, another drop: the current cut's objects back as the game's, then the new masks.
+            art_current(0);
+            for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
+                sArtDrop[w] = drop[w];
+            }
+            art_write();
+            art_current(1);
+        }
         return;
     }
     sArtOn = 0;
@@ -508,13 +551,10 @@ void mc_keep_artwork(void) {
             sArtAdd[i >> 5] |= 1u << (i & 31);
         }
     }
-    for (c = 0; c < n; c++) {
-        for (w = 0; w < sArtWords; w++) {
-            if (sArtAdd[w] & ~sArtOrig[c][w]) {
-                Mc_WriteU32(art_mask_addr(c, w), sArtOrig[c][w] | sArtAdd[w]);
-            }
-        }
+    for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
+        sArtDrop[w] = drop[w];
     }
+    art_write();
     sArtOn = 1;
     art_current(1); // (the current cut was set with the game's mask)
 }
@@ -528,7 +568,7 @@ void mc_restore_artwork(void) {
     if (art_ours()) {
         for (c = 0; c < sArtCuts; c++) {
             for (w = 0; w < sArtWords; w++) {
-                if (sArtAdd[w] & ~sArtOrig[c][w]) {
+                if (Mc_ReadU32(art_mask_addr(c, w)) != sArtOrig[c][w]) {
                     Mc_WriteU32(art_mask_addr(c, w), sArtOrig[c][w]);
                 }
             }
@@ -536,6 +576,281 @@ void mc_restore_artwork(void) {
         art_current(0);
     }
     sArtOn = 0;
+}
+
+// ---- J's Bar's restroom mirrors --------------------------------------------------------------------------------
+// The two mirrors over the sinks are no mirrors: grimy glass panes (room object 46) in front of a mirrored copy of the
+// room's door end and poster wall built behind the wall (objects 14 and 15) for the game's own fixed camera of the
+// sinks (cut 0) only; from the camera's angles the copy showed black glass and two floating posters. While the camera
+// drives there, the mirrors show the room reflected, as the game's own mirror shows it from its fixed camera:
+//   - at the room's draw (recomp_on_room_draw: the game's room loop, before any of its objects; the camera.roomDraw
+//     mark of patches.json) every object the frame draws in front of the mirror wall is drawn once more, its world
+//     matrix mirrored about the mirror plane (the glass, z = 13025), with the game's own functions (reo_guest_call:
+//     the world matrix and material slots, the render states, the model; reo_camera_us.h) and clipped to the glass
+//     panes on the screen (the game's own scissor routine: GS SCISSOR_1 around the panes, the game's value back right
+//     after). The walls and frames drawn after it hide it outside the glass, and the glass blends over it as it does
+//     over the copy. Not mirrored: what is mounted on the mirror wall (origin nearer the plane than MC_MIR_WALL_DEPTH:
+//     the glass, its frames, the light bars and their plates; their reflections lie on themselves, and parts of them
+//     reach into the wall, which mirrored would stand out of it next to the glass) and the counter top (38: it reaches
+//     more than 10 units into the wall, so mirrored it would lie on the real counter top in front of the wall; its
+//     reflection lies below the glass, seen through it only from nearer than about 90 units and higher than 240);
+//   - the copy (14, 15) is in no cut while the camera drives there (the artwork's drop, so a cut change never brings it
+//     back; Show Hidden Objects shows every object, so the copy's flags are also cleared right before the reflection
+//     is drawn), and neither is the right light bar's glow card 75, which only the fixed camera's angle shows as a glow
+//     (from the camera's angles it is a board over the bulbs; 2.1.0's artwork change drew it in every cut).
+// Characters are not reflected: the game's own mirror never reflected them either. Without the mark (an older game
+// build) the copy stays as before. Handed back (mc_restore_artwork), everything is the game's again.
+#define MC_MIR_OBJECTS  98      // the restroom: 98 objects, the glass and the copy at their places
+#define MC_MIR_COPY     14
+#define MC_MIR_POSTERS  15
+#define MC_MIR_COUNTER  38      // the counter top
+#define MC_MIR_GLASS    46
+#define MC_MIR_GLOW     75
+#define MC_MIR_PLANE    13025.0f // the glass's plane: z (the room on the +z side)
+#define MC_MIR_WALL_DEPTH 12.0f // objects whose origin is nearer the plane are on the mirror wall (not mirrored)
+#define MC_MIR_PANE_Y0  180.2f  // the two panes (the glass model's corners, world units)
+#define MC_MIR_PANE_Y1  241.8f
+#define MC_MIR_MARGIN   6.0f    // GS pixels around the panes' outline on the screen
+#define MC_MIR_NEAR     1.0f    // the projection's near plane (0x0032417C)
+#define MC_MIR_MAX_CALLS 3000   // calls of the game's code in one room draw (the host makes at most 4096)
+static const f32 kMirPaneX[4] = { 9684.7f, 9734.4f, 9850.0f, 9899.7f };
+static u32 sMirMarked = 0;      // the game build raises recomp_on_room_draw (seen once)
+static u32 sMirCalls;
+static u32 sMirAny;
+static f32 sMirLo[2], sMirHi[2]; // the panes' outline on the screen (x, y)
+
+static u32 mirror_at(u32 obj, f32 x, f32 y, f32 z) {
+    u32 m = REO_US_OBJ_MATRIX + REO_OBJ_MATRIX_STRIDE * obj + REO_OBJ_MATRIX_ORIGIN;
+    f32 dx = Mc_ReadF32(m) - x;
+    f32 dy = Mc_ReadF32(m + 4) - y;
+    f32 dz = Mc_ReadF32(m + 8) - z;
+
+    return Mc_IsSaneF32(dx) && Mc_IsSaneF32(dy) && Mc_IsSaneF32(dz) && dx * dx + dy * dy + dz * dz < 0.25f;
+}
+
+// J's Bar's restroom: 98 objects, the glass and the copy at their places.
+static u32 mirror_room(void) {
+    return Mc_ReadU16(REO_US_OBJ_COUNT) == MC_MIR_OBJECTS && mirror_at(MC_MIR_GLASS, 9792.24f, 211.01f, MC_MIR_PLANE) &&
+           mirror_at(MC_MIR_COPY, 9490.0f, 250.0f, 12687.5f);
+}
+
+// The artwork's drop: in the restroom the glow card, and the copy when the reflection is drawn.
+static void mirror_drop(u32* drop) {
+    u32 w;
+
+    for (w = 0; w < REO_CUT_MASK_WORDS; w++) {
+        drop[w] = 0;
+    }
+    if (!mirror_room()) {
+        return;
+    }
+    drop[MC_MIR_GLOW >> 5] |= 1u << (MC_MIR_GLOW & 31);
+    if (sMirMarked) {
+        drop[MC_MIR_COPY >> 5] |= 1u << (MC_MIR_COPY & 31);
+        drop[MC_MIR_POSTERS >> 5] |= 1u << (MC_MIR_POSTERS & 31);
+    }
+}
+
+static u32 mirror_call(u32 fn, u32 nargs, u32 a0, u32 a1, u32 a2, u32 a3, u32 t0) {
+    u32 args[5];
+
+    args[0] = a0;
+    args[1] = a1;
+    args[2] = a2;
+    args[3] = a3;
+    args[4] = t0;
+    sMirCalls++;
+    return reo_guest_call(fn, args, nargs);
+}
+
+// A point of the view in front of the near plane onto the frame: the outline grows by it.
+static void mirror_point(f32 vx, f32 vy, f32 vz, f32 kx, f32 ky, f32 w, f32 h) {
+    f32 d = -vz;
+    f32 x = w * 0.5f * (1.0f + kx * vx / d);
+    f32 y = h * 0.5f * (1.0f - ky * vy / d);
+
+    if (!Mc_IsSaneF32(x) || !Mc_IsSaneF32(y)) {
+        return;
+    }
+    if (!sMirAny) {
+        sMirLo[0] = sMirHi[0] = x;
+        sMirLo[1] = sMirHi[1] = y;
+        sMirAny = 1;
+        return;
+    }
+    sMirLo[0] = mc_minf(sMirLo[0], x);
+    sMirHi[0] = mc_maxf(sMirHi[0], x);
+    sMirLo[1] = mc_minf(sMirLo[1], y);
+    sMirHi[1] = mc_maxf(sMirHi[1], y);
+}
+
+// One pane (x0..x1 and the panes' height on the plane): its corners in the view (v' = p V, rows), the part of its
+// outline in front of the near plane onto the frame.
+static void mirror_pane(const f32* v, f32 x0, f32 x1, f32 kx, f32 ky, f32 w, f32 h) {
+    f32 c[4][3];
+    u32 i, j;
+
+    for (i = 0; i < 4; i++) {
+        f32 x = (i == 1 || i == 2) ? x1 : x0;
+        f32 y = i >= 2 ? MC_MIR_PANE_Y1 : MC_MIR_PANE_Y0;
+
+        for (j = 0; j < 3; j++) {
+            c[i][j] = x * v[j] + y * v[4 + j] + MC_MIR_PLANE * v[8 + j] + v[12 + j];
+        }
+    }
+    for (i = 0; i < 4; i++) {
+        const f32* a = c[i];
+        const f32* b = c[(i + 1) & 3];
+        u32 inA = a[2] <= -MC_MIR_NEAR;
+        u32 inB = b[2] <= -MC_MIR_NEAR;
+
+        if (inA) {
+            mirror_point(a[0], a[1], a[2], kx, ky, w, h);
+        }
+        if (inA != inB) {
+            f32 t = (-MC_MIR_NEAR - a[2]) / (b[2] - a[2]);
+
+            mirror_point(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, -MC_MIR_NEAR, kx, ky, w, h);
+        }
+    }
+}
+
+// Object i drawn mirrored about the glass's plane, as the game's room loop draws it.
+static void mirror_object(u32 i) {
+    u32 entry = Mc_ReadU32(REO_US_ROOM_DRAW + REO_ROOM_MODELS) + REO_MODEL_STRIDE * i;
+    u32 handle = Mc_ReadU32(entry);
+    u32 src = REO_US_ROOM_DRAW + REO_ROOM_MATRIX + REO_OBJ_MATRIX_STRIDE * i;
+    u32 m[16];
+    u32 k, n, scratch;
+    Mc_Word word;
+
+    if (handle == 0 || handle == 0xFFFFFFFFu) {
+        return;
+    }
+    if ((Mc_ReadU32(REO_US_ROOM_DRAW + REO_ROOM_MAT_SEL + 4 * (i >> 5)) >> (i & 31)) & 1) {
+        u32 at = Mc_ReadU32(REO_US_ROOM_DRAW + REO_ROOM_MAT_PTR + 4 * i);
+
+        if (at != 0) {
+            src = at;
+        }
+    }
+    for (k = 0; k < 16; k++) {
+        m[k] = Mc_ReadU32(src + 4 * k);
+    }
+    // The origin + the room's offset (behind the glass - the copy - or on the mirror wall: not mirrored), then mirrored
+    // in z: the axes' z negated, the origin's z to 2 plane - z.
+    for (k = 0; k < 3; k++) {
+        word.f = Mc_ReadF32(src + 0x30 + 4 * k) + Mc_ReadF32(REO_US_ROOM_DRAW + REO_ROOM_OFFSET + 4 * k);
+        if (k == 2) {
+            if (!Mc_IsSaneF32(word.f) || word.f < MC_MIR_PLANE + MC_MIR_WALL_DEPTH || i == MC_MIR_COUNTER) {
+                return;
+            }
+            word.f = 2.0f * MC_MIR_PLANE - word.f;
+        }
+        m[12 + k] = word.u;
+    }
+    m[2] ^= 0x80000000u;
+    m[6] ^= 0x80000000u;
+    m[10] ^= 0x80000000u;
+    scratch = reo_guest_scratch(m, 16);
+    if (scratch == 0) {
+        return;
+    }
+    mirror_call(REO_US_FN_SET_SLOT, 2, REO_SLOT_WORLD, scratch, 0, 0, 0);
+    if (Mc_ReadU8(entry + REO_MODEL_HAS_RSTATES)) {
+        mirror_call(REO_US_FN_RSTATES, 2, entry, REO_US_ROOM_DRAW + REO_ROOM_RSTATES + 4 * i, 0, 0, 0);
+    }
+    n = Mc_ReadU32(entry + REO_MODEL_COUNT);
+    if (n > 32) {
+        n = 32;
+    }
+    for (k = 0; k < n; k++) {
+        u32 record = Mc_ReadU16(REO_US_ROOM_DRAW + REO_ROOM_MATERIAL + 2 * Mc_ReadU32(entry + REO_MODEL_INDEX + 4 * k));
+
+        mirror_call(REO_US_FN_SET_SLOT, 2, REO_SLOT_MATERIAL + k, REO_US_MATERIALS + REO_MATERIAL_STRIDE * record, 0, 0,
+                    0);
+    }
+    mirror_call(REO_US_FN_DRAW_MODEL, 2, handle, 0, 0, 0, 0);
+}
+
+void mc_mirror_room_draw(u32 room, u32 group) {
+    u32 first, count, i, k, w, h, x0, y0, x1, y1;
+    u32 old[4];
+    f32 v[16];
+    f32 fov, aspect, half, kx, ky;
+    Mc_Vec3 eye;
+
+    sMirMarked = 1;
+    // Only while the camera drives with the artwork kept (the copy dropped from every cut), in the restroom.
+    if (room != REO_US_ROOM_DRAW || !sArtOn || !((sArtDrop[MC_MIR_COPY >> 5] >> (MC_MIR_COPY & 31)) & 1) ||
+        !mirror_room() || group >= Mc_ReadU8(REO_US_ROOM_DRAW + REO_ROOM_GROUPS)) {
+        return;
+    }
+    mc_read_camera_eye(&eye);
+    if (!(eye.z > MC_MIR_PLANE + 1.0f)) {
+        return;
+    }
+    // The panes on the screen: the frame's view and its projection (vertical field of view, aspect ratio).
+    for (k = 0; k < 16; k++) {
+        v[k] = Mc_ReadF32(REO_US_VIEW_MATRIX + 4 * k);
+        if (!Mc_IsSaneF32(v[k])) {
+            return;
+        }
+    }
+    fov = Mc_ReadF32(REO_US_CAM_FOV_DEG);
+    aspect = Mc_ReadF32(REO_US_CAM_ASPECT);
+    w = Mc_ReadU32(REO_US_SCREEN_W);
+    h = Mc_ReadU32(REO_US_SCREEN_H);
+    if (!Mc_IsSaneF32(fov) || fov < 1.0f || fov > 170.0f || !Mc_IsSaneF32(aspect) || aspect < 0.5f || aspect > 5.0f ||
+        w < 64 || w > 2048 || h < 64 || h > 2048) {
+        return;
+    }
+    half = fov * 0.5f * MC_DEG2RAD;
+    ky = mc_cosf(half) / mc_sinf(half);
+    kx = ky / aspect;
+    sMirAny = 0;
+    mirror_pane(v, kMirPaneX[0], kMirPaneX[1], kx, ky, (f32)w, (f32)h);
+    mirror_pane(v, kMirPaneX[2], kMirPaneX[3], kx, ky, (f32)w, (f32)h);
+    if (!sMirAny || sMirHi[0] < -MC_MIR_MARGIN || sMirHi[1] < -MC_MIR_MARGIN ||
+        sMirLo[0] > (f32)w + MC_MIR_MARGIN || sMirLo[1] > (f32)h + MC_MIR_MARGIN) {
+        return; // (the glass is not on the screen)
+    }
+    x0 = sMirLo[0] - MC_MIR_MARGIN <= 0.0f ? 0 : (u32)(sMirLo[0] - MC_MIR_MARGIN);
+    y0 = sMirLo[1] - MC_MIR_MARGIN <= 0.0f ? 0 : (u32)(sMirLo[1] - MC_MIR_MARGIN);
+    x1 = sMirHi[0] + MC_MIR_MARGIN >= (f32)(w - 1) ? w - 1 : (u32)(sMirHi[0] + MC_MIR_MARGIN);
+    y1 = sMirHi[1] + MC_MIR_MARGIN >= (f32)(h - 1) ? h - 1 : (u32)(sMirHi[1] + MC_MIR_MARGIN);
+    if (x1 < x0 || y1 < y0) {
+        return;
+    }
+    for (k = 0; k < 4; k++) {
+        old[k] = Mc_ReadU32(REO_US_SCISSOR_1 + 4 * k);
+    }
+    if (old[2] < old[0] || old[3] < old[1] || old[2] >= 2048 || old[3] >= 2048) {
+        return;
+    }
+    // The copy is never drawn with the reflection (Show Hidden Objects sets every object's flag at every frame).
+    for (k = 0; k < 2; k++) {
+        u32 f = Mc_ReadU8(REO_US_OBJ_FLAGS + (k ? MC_MIR_POSTERS : MC_MIR_COPY));
+
+        if (f & 1) {
+            Mc_WriteU8(REO_US_OBJ_FLAGS + (k ? MC_MIR_POSTERS : MC_MIR_COPY), f & ~1u);
+        }
+    }
+    sMirCalls = 0;
+    if (mirror_call(REO_US_FN_SCISSOR, 5, x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0) != 1) {
+        return; // (refused: this camera does not drive the camera)
+    }
+    first = Mc_ReadU8(REO_US_ROOM_DRAW + REO_ROOM_GROUP_FIRST + group);
+    count = Mc_ReadU8(REO_US_ROOM_DRAW + REO_ROOM_GROUP_COUNT + group);
+    for (i = first; i < first + count && i < MC_MIR_OBJECTS && sMirCalls < MC_MIR_MAX_CALLS; i++) {
+        u32 f = Mc_ReadU8(REO_US_OBJ_FLAGS + i);
+
+        if (!(f & 1) || (f & 0x80)) {
+            continue;
+        }
+        mirror_object(i);
+    }
+    mirror_call(REO_US_FN_SCISSOR, 5, old[0], old[1], old[2] - old[0] + 1, old[3] - old[1] + 1, 0);
 }
 
 static u32 sHaveCull = 0;

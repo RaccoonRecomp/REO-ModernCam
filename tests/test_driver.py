@@ -8,7 +8,8 @@ us_image.py). Everything happens in memory; no file is written.
 
 The fake game frame: the frame mark calls recomp_on_play_main, then the game's pad mapper runs (the camera.padMap
 mark calls recomp_on_pad_map with the player's record), then the per-character update (the camera.reload mark: a
-queued guest call runs there), then the game moves and turns her."""
+queued guest call runs there), then the game moves and turns her. Section 26 also raises recomp_on_room_draw (the
+camera.roomDraw mark: the room's draw loop) in a fake of J's Bar's restroom."""
 import math
 import os
 import struct
@@ -42,6 +43,7 @@ LIGHT = 0x00324098
 ITEMS = 0x003C5630
 COMBINE = 0x006690E0
 PADBLK = 0x01F00000
+SCRATCH = 0x01FFFE00  # where the fake host's scratch block is (reo_guest_scratch)
 # Game code ranges: the mod must never read or write them (patches.json switches the code sites instead).
 CODE = [(0x00100000, 0x00259D80), (0x00370040, 0x0037FD80), (0x00570040, 0x00708580)]
 
@@ -114,11 +116,15 @@ class Host:
         self.status = None
         self.logs = []
         self.config_writes = []
+        self.in_room_draw = False  # recomp_on_room_draw runs (reo_guest_call / reo_guest_scratch work only then)
+        self.now = []              # the calls of the game's code made at once: (function, argument words)
+        self.scratch = []          # the scratch words, in order
+        self.refused = 0
         for name in ("reo_feature_set", "reo_feature_state", "reo_image_loaded", "reo_vblank_rate_mhz",
                      "reo_config_get_rgb", "reo_config_set_float", "reo_cam_input", "reo_cam_input_hide",
                      "reo_pad_override", "reo_mouse_capture", "reo_cam_crosshair", "reo_guest_call_at",
-                     "reo_guest_call_result", "reo_local_player_slot", "reo_human_player_slots", "reo_cam_status",
-                     "reo_log"):
+                     "reo_guest_call_result", "reo_guest_call", "reo_guest_scratch", "reo_local_player_slot",
+                     "reo_human_player_slots", "reo_cam_status", "reo_log"):
             m.handlers[name] = getattr(self, name[4:])
 
     def state(self, name):
@@ -194,6 +200,26 @@ class Host:
                     m.w32(a[1], c["v0"])
                 return c["state"]
         return 3
+
+    def guest_call(self, m, a):
+        if not 0 <= a[2] <= 8:
+            raise ValueError("reo_guest_call with %d argument words" % a[2])
+        words = m.mod_words(a[1], a[2]) if a[2] else []
+        if not self.in_room_draw or not any(lo <= a[0] < hi for lo, hi in CODE):
+            self.refused += 1
+            return 0
+        self.now.append((a[0], words))
+        return 1  # (the functions the mirror calls - the scissor routine, the model draw - return 1)
+
+    def guest_scratch(self, m, a):
+        if not 1 <= a[1] <= 64:
+            raise ValueError("reo_guest_scratch with %d words" % a[1])
+        words = m.mod_words(a[0], a[1])
+        if not self.in_room_draw:
+            self.refused += 1
+            return 0
+        self.scratch.append(words)
+        return SCRATCH
 
     def local_player_slot(self, m, a):
         return self.local_slot
@@ -1146,7 +1172,148 @@ m.ee[CHAR + 0x08] = 1
 m.ee_set_u32(CHAR + 0xF80, 0)
 check(not code_touched(m), "no game code read or written")
 
-print("== 26. cost: MIPS instructions per game frame")
+print("== 26. J's Bar's restroom mirrors: the room reflected at the room's draw while the camera drives there")
+ROOM = 0x0049EEF0
+OBJ_FLAGS, OBJ_COUNT, OBJ_MATRIX = 0x0049F790, 0x0049F762, 0x0049FA10
+MODELS, MATERIALS = 0x00F51000, 0x004EDD90
+FN_SET_SLOT, FN_RSTATES, FN_DRAW, FN_SCISSOR = 0x001AF780, 0x00374B20, 0x0018C170, 0x00197490
+VIEW = 0x003240E0
+
+
+def stage_restroom(m):
+    """98 objects, every one drawn, one group; the glass (46), its frames (41), the copy (14, 15), the counter top
+    (38) and the right light bar's glow card (75) at their places, the others in front of the mirror wall; two cuts
+    whose masks hold every object; the frame's size, the engine's scissor."""
+    m.ee_set_u16(OBJ_COUNT, 98)
+    m.ee[ROOM + 3] = 1
+    m.ee[ROOM + 4] = 98
+    m.ee[ROOM + 0x2B20] = 0
+    m.ee_set_u32(ROOM + 0x868, MODELS)
+    at = {i: (9700.0 + 2.0 * i, 150.0, 13060.0 + 3.0 * i) for i in range(98)}
+    at.update({14: (9490.0, 250.0, 12687.5), 15: (9539.7, 174.8, 12836.2), 38: (9785.0, 131.3, 13066.2),
+               41: (9792.6, 210.7, 13025.0), 46: (9792.24, 211.01, 13025.0), 75: (9854.0, 275.0, 13033.5)})
+    for i in range(98):
+        b = OBJ_MATRIX + 0x40 * i
+        for k in range(16):
+            m.ee_set_f32(b + 4 * k, 1.0 if k in (0, 5, 10, 15) else 0.0)
+        m.ee_set_f32(b + 4, 0.25)  # (an axis with a z part: row 0 = 1, 0.25, 0.5)
+        m.ee_set_f32(b + 8, 0.5)
+        for k, v in enumerate(at[i]):
+            m.ee_set_f32(b + 0x30 + 4 * k, v)
+        m.ee[OBJ_FLAGS + i] = 1
+        e = MODELS + 0x98 * i
+        m.ee_set_u32(e, 100 + i)
+        m.ee_set_u32(e + 4, 2)
+        m.ee_set_u32(e + 8, 2 * i)
+        m.ee_set_u32(e + 12, 2 * i + 1)
+        m.ee[e + 0x88] = 1
+        m.ee_set_u16(ROOM + 0x68 + 4 * i, 300 + i)
+        m.ee_set_u16(ROOM + 0x6A + 4 * i, 400 + i)
+    m.ee[CUT + 1] = 2
+    m.ee[CUT + 3] = 0
+    for c in range(2):
+        for w in range(4):
+            m.ee_set_u32(CUT + 0x34 + c * 0x198 + 0x154 + 4 * w, 0xFFFFFFFF if w < 3 else 0x3)
+    m.ee_set_u32(0x0029FED8, 512)
+    m.ee_set_u32(0x0029FED0, 448)
+    for k, v in enumerate((0, 0, 511, 447)):
+        m.ee_set_u32(0x0029FDF8 + 4 * k, v)
+
+
+def build_view(m):
+    """The game's view matrix from the camera block, as 0x00375A50 builds it before the room is drawn (rows; columns
+    right, up, back; the eye at the origin)."""
+    e = [m.ee_f32(CAM_EYE + 4 * i) for i in range(3)]
+    t = [m.ee_f32(CAM_TGT + 4 * i) for i in range(3)]
+    b = [e[i] - t[i] for i in range(3)]
+    n = math.sqrt(sum(v * v for v in b))
+    if n < 1e-6:
+        return  # (no camera written yet)
+    b = [v / n for v in b]
+    r = [b[2], 0.0, -b[0]]
+    n = math.sqrt(sum(v * v for v in r))
+    r = [v / n for v in r]
+    u = [b[1] * r[2] - b[2] * r[1], b[2] * r[0] - b[0] * r[2], b[0] * r[1] - b[1] * r[0]]
+    for row in range(3):
+        for col, axis in enumerate((r, u, b)):
+            m.ee_set_f32(VIEW + 16 * row + 4 * col, axis[row])
+        m.ee_set_f32(VIEW + 16 * row + 12, 0.0)
+    for col, axis in enumerate((r, u, b)):
+        m.ee_set_f32(VIEW + 48 + 4 * col, -sum(e[i] * axis[i] for i in range(3)))
+    m.ee_set_f32(VIEW + 60, 1.0)
+
+
+def room_draw(g, room=ROOM, group=0):
+    g.host.now, g.host.scratch = [], []
+    build_view(g.m)
+    g.host.in_room_draw = True
+    g.m.call(g.m.symbols["Mcam_OnRoomDraw"], args=(room, group))
+    g.host.in_room_draw = False
+
+
+def mask_bits(m, c, i):
+    return (m.ee_u32(CUT + 0x34 + c * 0x198 + 0x154 + 4 * (i >> 5)) >> (i & 31)) & 1
+
+
+m = new_machine()
+g = Game(m)
+stage_restroom(m)
+m.config["cut_match"] = 0
+g.px, g.py, g.pz, g.heading = 9790.0, 0.0, 13300.0, 180.0  # in the restroom, facing the mirrors
+g.write()
+room_draw(g)  # (the game build raises the event: the mod knows the mark exists)
+check(not g.host.now and not g.host.scratch, "not driving yet: the room draw draws nothing")
+g.frame(5)
+check(g.host.status == (2, 0), "driving in the restroom")
+check(all(mask_bits(m, c, i) == 0 for c in range(2) for i in (14, 15, 75)) and
+      all(mask_bits(m, c, i) == 1 for c in range(2) for i in (0, 46, 97)),
+      "the copy (14, 15) and the glow card (75) are in no cut while the camera drives; the rest stays")
+check(all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15, 75)), "and the current cut does not draw them")
+m.log_writes = m.log_reads = True
+room_draw(g)
+calls = g.host.now
+check(calls and calls[0][0] == FN_SCISSOR and len(calls[0][1]) == 5 and calls[0][1][4] == 0,
+      "first the game's scissor routine with five words ($t0 = 0: SCISSOR_1): %s" % (calls[0][1] if calls else None,))
+x0, y0, w0, h0 = calls[0][1][:4]
+check(0 <= x0 < 512 and 0 <= y0 < 448 and 0 < w0 <= 512 - x0 and 0 < h0 <= 448 - y0 and w0 < 400 and h0 < 300,
+      "the scissor is the panes' outline on the screen (%d, %d, %d x %d), inside the frame" % (x0, y0, w0, h0))
+check(calls[-1] == (FN_SCISSOR, [0, 0, 512, 448, 0]), "last the engine's scissor back: %s" % (calls[-1][1],))
+draws = [c for c in calls if c[0] == FN_DRAW]
+drawn = [c[1][0] - 100 for c in draws]
+check(not set(drawn) & {14, 15, 38, 41, 46, 75} and len(drawn) == 92,
+      "every object drawn mirrored but the copy, the counter top and what is on the mirror wall (%d drawn)" % len(drawn))
+k = calls.index((FN_DRAW, [100 + 0, 0]))
+check(calls[k - 4: k] == [(FN_SET_SLOT, [0x1A, SCRATCH]), (FN_RSTATES, [MODELS, ROOM + 0x920]),
+                          (FN_SET_SLOT, [0x3A, MATERIALS + 0x4C * 300]), (FN_SET_SLOT, [0x3B, MATERIALS + 0x4C * 400])],
+      "an object as the room loop draws it: world matrix, render states, its materials, the model")
+mat = [u2f(w) for w in g.host.scratch[0]]
+check(len(g.host.scratch) == 92 and abs(mat[2] + 0.5) < 1e-6 and abs(mat[1] - 0.25) < 1e-6 and
+      abs(mat[14] - (2 * 13025.0 - 13060.0)) < 1e-3 and abs(mat[12] - 9700.0) < 1e-3 and mat[15] == 1.0,
+      "its matrix mirrored about the glass (z = 13025): the axes' z negated, the origin's z to 26050 - z")
+check(all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15)), "the copy not drawn with the reflection")
+room_draw(g, room=0x00500000)
+check(not g.host.now, "another room's draw: nothing")
+check(not code_touched(m), "no game code read or written")
+m.log_writes = m.log_reads = False
+# Show Hidden Objects sets every object's flag at every frame: the copy is still never drawn with the reflection.
+m.config["show_hidden_objects"] = 1
+g.frame(1)
+room_draw(g)
+check(len([c for c in g.host.now if c[0] == FN_DRAW]) == 92 and all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15)),
+      "Show Hidden Objects on: the copy's flags cleared right before the reflection is drawn")
+m.config["show_hidden_objects"] = 0
+g.frame(1)
+# Switched off: the masks and the current cut's flags as the game's; the room draw draws nothing.
+m.config["enabled"] = 0
+g.frame(1)
+check(all(mask_bits(m, c, i) == 1 for c in range(2) for i in (14, 15, 75)) and
+      all(m.ee[OBJ_FLAGS + i] & 1 == 1 for i in (14, 15, 75)),
+      "switched off: every mask and the copy's and glow card's flags back as the game's")
+room_draw(g)
+check(not g.host.now and not g.host.scratch, "switched off: the room draw draws nothing")
+m.config["enabled"] = 1
+
+print("== 27. cost: MIPS instructions per game frame")
 typical = sorted(steps)[len(steps) // 2]
 print("  frames %d, median %d, max %d instructions" % (len(steps), typical, max(steps)))
 check(max(steps) < 200000, "under 200k instructions per frame (max %d)" % max(steps))

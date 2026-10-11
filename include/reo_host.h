@@ -24,6 +24,11 @@
 //                                                 lw t4,0(a2)): heldWordAddr = $a2 (the mapped record's +0x08 word
 //                                                 the mapper is about to load), charRecord = $s0 (the character
 //                                                 record being mapped). Once per character per game frame.
+// recomp_on_room_draw(u32 room, u32 group)        at the camera.roomDraw mark (submain.bin 0x00372284: the room's draw
+//                                                 loop 0x00372210, after a group's lighting and before its objects):
+//                                                 room = $s3 (the room's draw data, 0x0049EEF0), group = $s1. Once per
+//                                                 object group of the room per drawn frame. reo_guest_call and
+//                                                 reo_guest_scratch work only inside it.
 
 // ---- Feature switches (the code sites of patches.json) -----------------------------------------------------------
 #define REO_FEATURE_CAMERA_FREEZE "camera.freeze"
@@ -127,6 +132,17 @@ typedef struct {
 RECOMP_IMPORT("*", u32 reo_guest_call_at(const char* hook, const ReoGuestCall* call));
 // State of a ticket (REO_CALL_*); when done, *v0 receives the function's $v0.
 RECOMP_IMPORT("*", u32 reo_guest_call_result(u32 ticket, u32* v0));
+
+// ---- Calls of the game's code at the room's draw (the restroom mirrors) ------------------------------------------
+// Inside recomp_on_room_draw only, and only for the camera mod that drives the camera: the game's function called at
+// once with `count` (at most 8) argument words in $a0-$a3 and $t0-$t3 (each sign-extended, as the EE's 32-bit loads
+// do), every register as before afterwards; returns its $v0 (0 when refused: outside the event, not the driving camera,
+// not the game's code in memory, more than 4096 calls in one event).
+RECOMP_IMPORT("*", u32 reo_guest_call(u32 function, const u32* args, u32 count));
+// Inside recomp_on_room_draw only: `count` (1-64) words into a scratch block of guest memory for the calls of this
+// event (16-aligned, on the game's stack right below the mark's; the calls run below it; what was there is put back
+// when the event ends). Returns its guest address (0 when refused). Each call writes the block from its start.
+RECOMP_IMPORT("*", u32 reo_guest_scratch(const u32* words, u32 count));
 
 // ---- Players -----------------------------------------------------------------------------------------------------
 // The character record the local player drives (0 offline) and the records driven by people (bit per record 0-3;

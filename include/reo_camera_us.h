@@ -139,6 +139,44 @@
 #define REO_US_OBJ_MATRIX      0x0049FA10
 #define REO_OBJ_MATRIX_STRIDE  0x40
 #define REO_OBJ_MATRIX_ORIGIN  0x30
+// ---- The room's draw (submain.bin's room loop 0x00372210; the mirror draws with the game's own functions) ----------
+// The room's draw data: the loop's a0 ($s3 at the camera.roomDraw mark). REO_US_OBJ_COUNT, REO_US_OBJ_FLAGS and
+// REO_US_OBJ_MATRIX lie in it (+0x872, +0x8A0, +0xB20). The loop draws group g's objects (first +0x2B20 + g, count +4 +
+// g; +3 the groups) whose flag has bit 0 and not bit 7: the matrix (+0xB20 + 0x40 i, or the pointer at +0x2C80 + 4 i
+// when bit i of the words at +0x2C70 is set) + the vector at +0x880 into slot 0x1A, the model entry's render states
+// (0x00374B20 when its +0x88 byte is set), its materials into slots 0x3A + k, then the model (0x0018C170).
+#define REO_US_ROOM_DRAW      0x0049EEF0
+#define REO_ROOM_GROUPS       0x003   // u8: object groups
+#define REO_ROOM_GROUP_COUNT  0x004   // u8 per group: its objects
+#define REO_ROOM_MATERIAL     0x068   // u16 per material index: the number of its material record
+#define REO_ROOM_MODELS       0x868   // u32: the model table, REO_MODEL_STRIDE bytes per object
+#define REO_ROOM_OFFSET       0x880   // f32 x3: added to every object's origin
+#define REO_ROOM_RSTATES      0x920   // u32 per object: its render states
+#define REO_ROOM_MATRIX       0xB20   // f32 4x4 per object (= REO_US_OBJ_MATRIX)
+#define REO_ROOM_GROUP_FIRST  0x2B20  // u8 per group: its first object
+#define REO_ROOM_MAT_SEL      0x2C70  // 4 words: bit i = object i's matrix is at the pointer REO_ROOM_MAT_PTR + 4 i
+#define REO_ROOM_MAT_PTR      0x2C80
+#define REO_MODEL_STRIDE      0x98    // +0 the model handle (0 or -1: none), +4 its material count, +8 their indices
+#define REO_MODEL_COUNT       0x04    // (u32 each), +0x88 u8: the model has render states
+#define REO_MODEL_INDEX       0x08
+#define REO_MODEL_HAS_RSTATES 0x88
+#define REO_US_MATERIALS      0x004EDD90 // the material records, 0x4C bytes each
+#define REO_MATERIAL_STRIDE   0x4C
+// exe 0x001AF780 (slot, data): slot 0x1A = the world matrix (copied to the scratchpad), 0x3A + k = material k.
+#define REO_US_FN_SET_SLOT    0x001AF780
+#define REO_SLOT_WORLD        0x1A
+#define REO_SLOT_MATERIAL     0x3A
+#define REO_US_FN_RSTATES     0x00374B20 // submain (model entry, render states)
+#define REO_US_FN_DRAW_MODEL  0x0018C170 // exe (handle, 0): the model drawn with the slots; returns 1
+// exe 0x00197490 (x, y, width, height, $t0 = 0 for SCISSOR_1): a GS SCISSOR packet into the frame's list from here on,
+// clamped to the frame (REO_US_SCREEN_W / _H); it keeps the value at REO_US_SCISSOR_1 (x0, y0, x1, y1: u32). Returns 1.
+#define REO_US_FN_SCISSOR     0x00197490
+#define REO_US_SCISSOR_1      0x0029FDF8
+#define REO_US_SCREEN_H       0x0029FED0 // u32 448
+#define REO_US_SCREEN_W       0x0029FED8 // u32 512
+// f32 4x4 (rows): the frame's view matrix, built from the camera block by 0x00375A50 before the room is drawn
+// (x right, y up, the camera looks along -z). The projection: REO_US_CAM_FOV_DEG (vertical), REO_US_CAM_ASPECT.
+#define REO_US_VIEW_MATRIX    0x003240E0
 // u32 pointer to the room's wall records (0x38 bytes each), set by the room-collision loader
 // 0x006161E0. [WALL_PTRS file1 0x003938C4]
 #define REO_US_WALL_PTR  0x003C2724

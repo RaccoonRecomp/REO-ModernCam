@@ -1443,3 +1443,10 @@ void Mcam_OnPadMap(u32 heldWordAddr, u32 charRecord) {
     }
     mc_padmap_apply(heldWordAddr, s.map.press, s.map.supp, s.map.centreL, s.map.centreR);
 }
+
+// The camera.roomDraw mark (submain.bin 0x00372284): the room's draw loop, before a group's objects. J's Bar's restroom
+// mirrors show the room reflected while the camera drives there (game.c, mc_mirror_room_draw).
+RECOMP_CALLBACK("*", recomp_on_room_draw)
+void Mcam_OnRoomDraw(u32 room, u32 group) {
+    mc_mirror_room_draw(room, group);
+}

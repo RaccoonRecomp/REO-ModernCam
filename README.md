@@ -33,8 +33,9 @@ uses was found again on this disc.
 > compiles them in when it prepares the game, so the camera works as soon as you switch the mod on.
 
 The camera never writes the game's code. To stop the game's own camera and gun servo it switches two features compiled
-into the prepared game code, `camera.freeze` and `camera.freeAim`, and it runs at three marks there (the game frame,
-the pad mapper, and the per-character update for the reload). These code sites come with the download (`patches.json`,
+into the prepared game code, `camera.freeze` and `camera.freeAim`, and it runs at four marks there (the game frame,
+the pad mapper, the per-character update for the reload, and the room's draw for the restroom mirrors). These code
+sites come with the download (`patches.json`,
 made by `tools/gen_patches.py`), and the program checks every site against your own copy when it prepares your game.
 Without them the camera cannot take over the game's camera: its status on the Mods tab and in the camera window says
 so.
@@ -87,6 +88,9 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
 - **Room cuts**: Match Room Cuts borrows the room's own camera nearest your view, so the game draws what that view
   needs; Show Hidden Objects; Draw Distance; Character Light. The walls and pictures a fixed camera of the room leaves
   out (the wall it looks through, the pictures on it) stay drawn while the camera drives.
+- **J's Bar's restroom mirrors** show the room reflected from every angle while the camera drives there (the game's
+  own mirrors are a copy built for its fixed camera only, black from anywhere else); characters are not reflected, as
+  in the game. The light bar's glow card, a board over the bulbs from the camera's angles, is not drawn there.
 - **Doors and cutscenes**: the camera gives way when the game moves it, and can yield during cutscenes and come back
   when you move.
 

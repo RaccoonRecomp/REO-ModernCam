@@ -72,6 +72,9 @@ u32 mc_show_all_objects(void);
 // and the current cut's objects back (not when a new room's masks are in memory: those are the game's).
 void mc_keep_artwork(void);
 void mc_restore_artwork(void);
+// J's Bar's restroom mirrors (game.c): the reflection drawn at the room's draw while the camera drives there (the
+// artwork kept). recomp_on_room_draw's arguments.
+void mc_mirror_room_draw(u32 room, u32 group);
 // The near-camera hide radii (reo_camera_us.h): scaled from the originals, never above them.
 void mc_set_near_hide_scale(f32 scale);
 void mc_restore_near_hide(void);

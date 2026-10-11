@@ -5,7 +5,8 @@ Resident Evil Outbreak Recompiled that run it: the sandboxed mod runtime, the ca
 settings window. The mod side of the same contract is `include/reo_host.h`. The fake host in `tests/test_driver.py`
 implements every function below and is the reference for its behaviour.
 
-Contract version 1. Everything here is for File #1, USA v2.00 (SLUS-20765).
+Contract version 2 (version 1 plus the room-draw event and its two calls: 2, 3, 4.14, 5). Everything here is for
+File #1, USA v2.00 (SLUS-20765).
 
 ## 1. How the mod runs
 
@@ -39,6 +40,7 @@ Contract version 1. Everything here is for File #1, USA v2.00 (SLUS-20765).
 |---|---|---|
 | `recomp_on_play_main(void)` | once per game frame, at the game-frame mark: exe `0x0019F6C0`, `patches.json` site `camera.gameFrame`, hook `game.frame` (the rate profile's frame mark, shared) | none |
 | `recomp_on_pad_map(u32 heldWordAddr, u32 charRecord)` | at the `camera.padMap` mark, exe `0x001B0C5C`, before the mapper's `lw t4,0(a2)`; once per character mapped in a frame | `heldWordAddr` = `$a2` (the mapped record's `+0x08` word, `0x00324248` for the local player offline); `charRecord` = `$s0` (the character record, `0x004A5C30 + 0x10E0 * slot`) |
+| `recomp_on_room_draw(u32 room, u32 group)` | at the `camera.roomDraw` mark, submain.bin `0x00372284`: the room's draw loop `0x00372210`, after a group's lighting (`jal 0x006B2E20`) and before its objects; once per object group of the room in a drawn frame | `room` = `$s3` (the room's draw data, `0x0049EEF0`); `group` = `$s1` |
 
 **Order within a game frame.**
 1. The frame mark: `recomp_on_play_main` computes the camera. It writes the eye, look-at, FOV and data values, and
@@ -66,11 +68,12 @@ write can race the game's pad read, and the mod logs it.
 | `void reo_mouse_capture(u32 on)` | 4.8 |
 | `void reo_cam_crosshair(const ReoCrosshair* c)` | 4.9 |
 | `u32 reo_guest_call_at(const char* hook, const ReoGuestCall* call)`, `u32 reo_guest_call_result(u32 ticket, u32* v0)` | 4.10 |
+| `u32 reo_guest_call(u32 function, const u32* args, u32 count)`, `u32 reo_guest_scratch(const u32* words, u32 count)` | 4.14 |
 | `u32 reo_local_player_slot(void)`, `u32 reo_human_player_slots(void)` | 4.11 |
 | `void reo_cam_status(u32 status, u32 detail)` | 4.12 |
 | `void reo_log(const char* text)` | 4.13 |
 
-All of them are called on the game thread, from inside the two events.
+All of them are called on the game thread, from inside the events.
 
 ## 4. The functions
 
@@ -296,12 +299,44 @@ The host adds its own states: not installed, disabled in Mods, or the mod stoppe
 ### 4.13 `reo_log(text)`
 One line for REO's log. Only the mod's `[evt]` lines use it, while `debug_log` is on.
 
+### 4.14 Calls of the game's code at the room's draw (the restroom mirrors)
+J's Bar's restroom mirrors are a mirrored copy of the room's door end behind the glass, built for the game's fixed
+camera only. The mod draws the real reflection itself, with the game's own functions, inside `recomp_on_room_draw`:
+
+```
+u32 v0   = reo_guest_call(function, args, count);   /* count <= 8: $a0-$a3, $t0-$t3; 0 when refused */
+u32 addr = reo_guest_scratch(words, count);         /* count 1-64; 0 when refused */
+```
+
+- **`reo_guest_call`.** Only inside `recomp_on_room_draw` and only for the camera mod that drives the camera: the host
+  calls `FeatureHookContext::CallGuest(function)` at once, with the argument words in `$a0`-`$a3` and `$t0`-`$t3`
+  (each sign-extended to 64 bits, as the EE's 32-bit loads do) and `$sp` below the scratch block; afterwards every
+  register is as before (the host puts `$t0`-`$t3` and `$sp` back itself). It returns `$v0`. Refused (0, counted in
+  the report, one log line per reason): outside the event, another mod, a function outside the code of the executable
+  or of an overlay in memory, more than 4096 calls in one event. What the function changes is the game's (here: the
+  packets of the picture being drawn); a vblank start a call passes has its step at the event's end.
+- **`reo_guest_scratch`.** The words into a scratch block of guest memory for the event's calls, from its start: 16-aligned,
+  on the game's stack right below the mark's `$sp` (the calls run 64 bytes below it). Returns its guest address. What
+  was on the stack there is put back when the event ends.
+- **What the mod calls** (reo_camera_us.h): the game's scissor routine exe `0x00197490(x, y, width, height, $t0 = 0)`
+  (a GS SCISSOR_1 packet into the frame's list; it keeps the value at `0x0029FDF8`), and per object what the room loop
+  `0x00372210` calls: exe `0x001AF780(0x1A, matrix)` (the world matrix: a scratch block), submain `0x00374B20(model
+  entry, render states)`, `0x001AF780(0x3A + k, material record)`, exe `0x0018C170(handle, 0)` (the model).
+- **What the mod draws.** In the restroom (98 objects, the glass object 46 at z = 13025, the copy object 14 behind it),
+  while it drives with the room's artwork kept: the scissor around the glass panes on the screen (from the frame's view
+  matrix `0x003240E0`, the FOV and the aspect word), then every drawn object in front of the mirror wall (not the copy,
+  not what is mounted on the wall, not the counter top) with its matrix mirrored about z = 13025 (the axes' z negated,
+  the origin's z to 26050 - z), then the engine's scissor back. Drawn before the room's own objects, the walls hide it
+  outside the glass and the glass blends over it. The copy (14, 15) and the light bar's glow card (75) are dropped from
+  every cut's mask while the camera drives there (put back when it hands back). Probed: about 95 objects and 400 calls
+  per drawn frame, at most 82,673 mod instructions per game frame.
+
 ## 5. The code sites (`patches.json`)
 `patches.json` is a feature-profile fragment for `REOutbreakTools feature-profile build --mod-patches <mod
 folder>/patches.json`. `tools/gen_patches.py` writes it from the owner's disc and checks every original word. It holds
 instruction words of the owner's disc, so it stays private.
 
-Checked with the features build (`feature-profile build`, the owner's disc, the rate profile): all 54 sites apply and
+Checked with the features build (`feature-profile build`, the owner's disc, the rate profile): all 55 sites apply and
 none conflicts with the rate profile.
 
 | Feature | Sites | Kind |
@@ -313,7 +348,7 @@ none conflicts with the rate profile.
 | | follow handler's eye call `0x005D9AC0` | callIf (as the exe) |
 | `camera.freeAim` | servo calls `0x00586C08`, `0x00586C20`, `0x00586C38` | callIf (as the exe) |
 | | stores `0x00586C6C`, `0x00586C78`, `0x00586C84`, `0x00586C88` | subst nop (as the exe) |
-| marks | `camera.gameFrame` exe `0x0019F6C0` (hook `game.frame`), `camera.padMap` exe `0x001B0C5C`, `camera.reload` game.bin `0x0066B500` | mark |
+| marks | `camera.gameFrame` exe `0x0019F6C0` (hook `game.frame`), `camera.padMap` exe `0x001B0C5C`, `camera.reload` game.bin `0x0066B500`, `camera.roomDraw` submain.bin `0x00372284` (image `submain.bin`, `xxh64:0203c44ed7180d75`) | mark |
 
 Each site has an `option` member naming the setting that switches it (`enabled`, or `modern_aim, free_aim`) and a
 `note`. The parser ignores both.
