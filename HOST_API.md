@@ -323,13 +323,17 @@ u32 addr = reo_guest_scratch(words, count);         /* count 1-64; 0 when refuse
   `0x00372210` calls: exe `0x001AF780(0x1A, matrix)` (the world matrix: a scratch block), submain `0x00374B20(model
   entry, render states)`, `0x001AF780(0x3A + k, material record)`, exe `0x0018C170(handle, 0)` (the model).
 - **What the mod draws.** In the restroom (98 objects, the glass object 46 at z = 13025, the copy object 14 behind it),
-  while it drives with the room's artwork kept: the scissor around the glass panes on the screen (from the frame's view
+  while it drives with the room's artwork kept: per glass pane on the screen (one pass for both when one rectangle
+  around them is smaller or the two meet) the scissor around the part of the pane on the screen (from the frame's view
   matrix `0x003240E0`, the FOV and the aspect word), then every drawn object in front of the mirror wall (not the copy,
-  not what is mounted on the wall, not the counter top) with its matrix mirrored about z = 13025 (the axes' z negated,
-  the origin's z to 26050 - z), then the engine's scissor back. Drawn before the room's own objects, the walls hide it
-  outside the glass and the glass blends over it. The copy (14, 15) and the light bar's glow card (75) are dropped from
-  every cut's mask while the camera drives there (put back when it hands back). Probed: about 95 objects and 400 calls
-  per drawn frame, at most 82,673 mod instructions per game frame.
+  not what is mounted on the wall, not the counter top) whose reflection that pane can show (its model's vertex bounds,
+  read once from the model records at `0x002941A0`: +0x20 the packet, +0x2C its chains' size, +0x40 the vertices) with
+  its matrix mirrored about z = 13025 (the axes' z negated, the origin's z to 26050 - z); last the engine's scissor
+  back. Drawn before the room's own objects, the walls hide it outside the glass and the glass blends over it. The copy
+  (14, 15) is dropped from every cut's mask while the camera drives there (put back when it hands back). The light bars'
+  glow cards (63, 66, ..., 84) seen from their left are drawn without writing depth (the model entry's byte +0x8F, which
+  `0x00374B20` hands on; put back when it hands back). Probed: about 20 objects and 110 calls per drawn frame, at most
+  177,294 mod instructions per game frame (while the bounds are read).
 
 ## 5. The code sites (`patches.json`)
 `patches.json` is a feature-profile fragment for `REOutbreakTools feature-profile build --mod-patches <mod

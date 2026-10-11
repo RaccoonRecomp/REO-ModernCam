@@ -90,7 +90,8 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
   out (the wall it looks through, the pictures on it) stay drawn while the camera drives.
 - **J's Bar's restroom mirrors** show the room reflected from every angle while the camera drives there (the game's
   own mirrors are a copy built for its fixed camera only, black from anywhere else); characters are not reflected, as
-  in the game. The light bar's glow card, a board over the bulbs from the camera's angles, is not drawn there.
+  in the game. The light bars' glow cards look as the fixed camera shows them (from the other side they covered the
+  bulbs behind them like a flat board).
 - **Doors and cutscenes**: the camera gives way when the game moves it, and can yield during cutscenes and come back
   when you move.
 

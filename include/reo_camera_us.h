@@ -157,9 +157,19 @@
 #define REO_ROOM_MAT_SEL      0x2C70  // 4 words: bit i = object i's matrix is at the pointer REO_ROOM_MAT_PTR + 4 i
 #define REO_ROOM_MAT_PTR      0x2C80
 #define REO_MODEL_STRIDE      0x98    // +0 the model handle (0 or -1: none), +4 its material count, +8 their indices
-#define REO_MODEL_COUNT       0x04    // (u32 each), +0x88 u8: the model has render states
+#define REO_MODEL_COUNT       0x04    // (u32 each), +0x88 u8: the model has render states (0x00374B20 hands the
+                                      // game's slots its bytes up to +0x8F; +0x8F: the depth write, 1 = on)
 #define REO_MODEL_INDEX       0x08
 #define REO_MODEL_HAS_RSTATES 0x88
+#define REO_MODEL_ZWRITE      0x8F
+// u32: the model records (0x180 bytes each), the handle's at (handle - 1) * 0x180: +0x20 its packet (a DMA "ret"
+// chain per material: VIF codes, UNPACK V4-32 blocks with a GIF tag of ST, RGBAQ, XYZF2 and its vertices, 4 qwords
+// each, the position first), +0x2C the chains' size, +0x40 its vertices.
+#define REO_US_MODEL_RECORDS  0x002941A0
+#define REO_MODEL_REC_STRIDE  0x180
+#define REO_MREC_PACKET       0x20
+#define REO_MREC_CHAINS_END   0x2C
+#define REO_MREC_VERTICES     0x40
 #define REO_US_MATERIALS      0x004EDD90 // the material records, 0x4C bytes each
 #define REO_MATERIAL_STRIDE   0x4C
 // exe 0x001AF780 (slot, data): slot 0x1A = the world matrix (copied to the scratchpad), 0x3A + k = material k.

@@ -27,14 +27,16 @@
   No setting; Show Hidden Objects is unchanged.
 - **J's Bar's restroom mirrors show the room reflected**: the game's mirrors are a mirrored copy of the room's door end
   built behind the glass for its own fixed camera only; from the camera's angles they showed black glass and two
-  floating posters. While the camera drives there, the room is drawn a second time, mirrored about the glass and
-  clipped to it, with the game's own functions, before the room's own objects, so the glass blends over the reflection
-  as over the copy: from the game's fixed camera it looks as the game's own mirror (measured: within 2.4 of 255 per
-  channel inside the glass), from every other angle it is the room as a mirror shows it. The copy is not drawn then.
+  floating posters. While the camera drives there, what of the room the glass can show is drawn a second time,
+  mirrored about the glass and clipped to the part of each pane on the screen, with the game's own functions, before
+  the room's own objects, so the glass blends over the reflection as over the copy: from the game's fixed camera it
+  looks as the game's own mirror (measured: within 2.4 of 255 per channel inside the glass), from every other angle it
+  is the room as a mirror shows it. The copy is not drawn then.
   Characters are not reflected (the game's mirror never reflected them). It needs a game build with the new mark
   `camera.roomDraw` of `patches.json` (and HOST_API.md contract 2); without it nothing changes. No setting.
-- **The restroom's light bar**: its glow card (object 75), which only the fixed camera's angle shows as a glow, is not
-  drawn while the camera drives there; from the camera's angles it was a board over the bulbs.
+- **The restroom's light bars**: each bulb's glow card is drawn as the fixed camera shows it; seen from the side the
+  fixed camera never sees, its glow covered the bulbs behind it like a flat board (it is then drawn without writing
+  depth).
 - One setting added (Lock On Enemy, 117 settings). `patches.json` has one site more: the mark `camera.roomDraw`
   (submain.bin), for the mirrors.
 

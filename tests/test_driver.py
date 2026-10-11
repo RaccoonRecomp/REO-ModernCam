@@ -1176,28 +1176,61 @@ print("== 26. J's Bar's restroom mirrors: the room reflected at the room's draw 
 ROOM = 0x0049EEF0
 OBJ_FLAGS, OBJ_COUNT, OBJ_MATRIX = 0x0049F790, 0x0049F762, 0x0049FA10
 MODELS, MATERIALS = 0x00F51000, 0x004EDD90
+RECORDS, RECORD_BASE, PACKETS = 0x002941A0, 0x00C00000, 0x00C80000
 FN_SET_SLOT, FN_RSTATES, FN_DRAW, FN_SCISSOR = 0x001AF780, 0x00374B20, 0x0018C170, 0x00197490
 VIEW = 0x003240E0
+CARDS = (63, 66, 69, 72, 75, 78, 81, 84)  # the light bars' glow cards
+SEEN, UNSEEN = 0, 1  # objects with a model the glass can / cannot show
+
+
+def stage_model(m, i, lo, hi):
+    """Object i's model record and packet: a DMA "ret" chain with one UNPACK V4-32 block holding a GIF tag of ST,
+    RGBAQ, XYZF2 and the 8 corners of the box lo..hi (model space), 4 qwords each, the position first."""
+    rec = RECORD_BASE + 0x180 * (100 + i - 1)
+    pkt = PACKETS + 0x400 * i
+    num = 2 + 4 * 8
+    m.ee_set_u32(pkt, 0x60000000 | (num + 2))      # DMA ret, QWC
+    m.ee_set_u32(pkt + 24, 0x01000404)             # STCYCL 4, 4
+    m.ee_set_u32(pkt + 28, 0x6C008000 | (num << 16))  # UNPACK V4-32
+    m.ee_set_u32(pkt + 32, 1)
+    m.ee_set_u32(pkt + 48, 0x8000 | 8)             # GIF tag: NLOOP 8, EOP
+    m.ee_set_u32(pkt + 52, 0x30000000)             # NREG 3
+    m.ee_set_u32(pkt + 56, 0x412)                  # ST, RGBAQ, XYZF2
+    for v in range(8):
+        q = pkt + 64 + 64 * v
+        for k in range(3):
+            m.ee_set_f32(q + 4 * k, hi[k] if (v >> k) & 1 else lo[k])
+    m.ee_set_u32(pkt + 64 + 64 * 8, 0x17000000)    # MSCNT
+    size = 16 * (num + 3)
+    m.ee_set_u32(rec + 0x20, pkt)
+    m.ee_set_u32(rec + 0x2C, size)
+    m.ee_set_u32(rec + 0x40, 8)
 
 
 def stage_restroom(m):
     """98 objects, every one drawn, one group; the glass (46), its frames (41), the copy (14, 15), the counter top
-    (38) and the right light bar's glow card (75) at their places, the others in front of the mirror wall; two cuts
-    whose masks hold every object; the frame's size, the engine's scissor."""
+    (38) and the light bars' glow cards at their places, the others in front of the mirror wall; two objects with a
+    model (the rest without one: drawn by every pass); two cuts whose masks hold every object; the frame's size, the
+    engine's scissor."""
     m.ee_set_u16(OBJ_COUNT, 98)
     m.ee[ROOM + 3] = 1
     m.ee[ROOM + 4] = 98
     m.ee[ROOM + 0x2B20] = 0
     m.ee_set_u32(ROOM + 0x868, MODELS)
+    m.ee_set_u32(RECORDS, RECORD_BASE)
     at = {i: (9700.0 + 2.0 * i, 150.0, 13060.0 + 3.0 * i) for i in range(98)}
     at.update({14: (9490.0, 250.0, 12687.5), 15: (9539.7, 174.8, 12836.2), 38: (9785.0, 131.3, 13066.2),
-               41: (9792.6, 210.7, 13025.0), 46: (9792.24, 211.01, 13025.0), 75: (9854.0, 275.0, 13033.5)})
+               41: (9792.6, 210.7, 13025.0), 46: (9792.24, 211.01, 13025.0),
+               SEEN: (9900.0, 210.0, 13300.0), UNSEEN: (9200.0, 55.0, 13045.0)})
+    for k, i in enumerate(CARDS):
+        at[i] = (9689.0 + 22.5 * (k % 4) + (165.0 if k >= 4 else 0.0), 275.0, 13033.5)
     for i in range(98):
         b = OBJ_MATRIX + 0x40 * i
         for k in range(16):
             m.ee_set_f32(b + 4 * k, 1.0 if k in (0, 5, 10, 15) else 0.0)
-        m.ee_set_f32(b + 4, 0.25)  # (an axis with a z part: row 0 = 1, 0.25, 0.5)
-        m.ee_set_f32(b + 8, 0.5)
+        if i not in (SEEN, UNSEEN):
+            m.ee_set_f32(b + 4, 0.25)  # (an axis with a z part: row 0 = 1, 0.25, 0.5)
+            m.ee_set_f32(b + 8, 0.5)
         for k, v in enumerate(at[i]):
             m.ee_set_f32(b + 0x30 + 4 * k, v)
         m.ee[OBJ_FLAGS + i] = 1
@@ -1207,8 +1240,13 @@ def stage_restroom(m):
         m.ee_set_u32(e + 8, 2 * i)
         m.ee_set_u32(e + 12, 2 * i + 1)
         m.ee[e + 0x88] = 1
+        m.ee[e + 0x8F] = 1  # (the depth write on)
         m.ee_set_u16(ROOM + 0x68 + 4 * i, 300 + i)
         m.ee_set_u16(ROOM + 0x6A + 4 * i, 400 + i)
+    m.ee_set_u16(ROOM + 0x68 + 4 * 3, 300 + 2)  # (object 3's materials are object 2's)
+    m.ee_set_u16(ROOM + 0x6A + 4 * 3, 400 + 2)
+    stage_model(m, SEEN, (-20.0, -20.0, -20.0), (20.0, 20.0, 20.0))
+    stage_model(m, UNSEEN, (-5.0, -5.0, -5.0), (5.0, 5.0, 5.0))
     m.ee[CUT + 1] = 2
     m.ee[CUT + 3] = 0
     for c in range(2):
@@ -1255,6 +1293,10 @@ def mask_bits(m, c, i):
     return (m.ee_u32(CUT + 0x34 + c * 0x198 + 0x154 + 4 * (i >> 5)) >> (i & 31)) & 1
 
 
+def zwrite(m, i):
+    return m.ee[MODELS + 0x98 * i + 0x8F]
+
+
 m = new_machine()
 g = Game(m)
 stage_restroom(m)
@@ -1265,30 +1307,43 @@ room_draw(g)  # (the game build raises the event: the mod knows the mark exists)
 check(not g.host.now and not g.host.scratch, "not driving yet: the room draw draws nothing")
 g.frame(5)
 check(g.host.status == (2, 0), "driving in the restroom")
-check(all(mask_bits(m, c, i) == 0 for c in range(2) for i in (14, 15, 75)) and
-      all(mask_bits(m, c, i) == 1 for c in range(2) for i in (0, 46, 97)),
-      "the copy (14, 15) and the glow card (75) are in no cut while the camera drives; the rest stays")
-check(all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15, 75)), "and the current cut does not draw them")
+check(all(mask_bits(m, c, i) == 0 for c in range(2) for i in (14, 15)) and
+      all(mask_bits(m, c, i) == 1 for c in range(2) for i in (0, 46, 75, 97)),
+      "the copy (14, 15) is in no cut while the camera drives; the rest stays (the glow card 75 too)")
+check(all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15)), "and the current cut does not draw it")
+ex = m.ee_f32(CAM_EYE)
+left = [i for i in CARDS if ex < m.ee_f32(OBJ_MATRIX + 0x40 * i + 0x30)]
+check(left and len(left) < len(CARDS) and all(zwrite(m, i) == (0 if i in left else 1) for i in CARDS),
+      "glow cards seen from their left drawn without depth write, the others as the game draws them (eye x %.1f, "
+      "left of %s)" % (ex, left))
 m.log_writes = m.log_reads = True
 room_draw(g)
 calls = g.host.now
+scissors = [k for k, c in enumerate(calls) if c[0] == FN_SCISSOR]
 check(calls and calls[0][0] == FN_SCISSOR and len(calls[0][1]) == 5 and calls[0][1][4] == 0,
       "first the game's scissor routine with five words ($t0 = 0: SCISSOR_1): %s" % (calls[0][1] if calls else None,))
 x0, y0, w0, h0 = calls[0][1][:4]
 check(0 <= x0 < 512 and 0 <= y0 < 448 and 0 < w0 <= 512 - x0 and 0 < h0 <= 448 - y0 and w0 < 400 and h0 < 300,
-      "the scissor is the panes' outline on the screen (%d, %d, %d x %d), inside the frame" % (x0, y0, w0, h0))
+      "the scissor is the part of the panes on the screen (%d, %d, %d x %d), inside the frame" % (x0, y0, w0, h0))
 check(calls[-1] == (FN_SCISSOR, [0, 0, 512, 448, 0]), "last the engine's scissor back: %s" % (calls[-1][1],))
+passes = len(scissors) - 1
 draws = [c for c in calls if c[0] == FN_DRAW]
 drawn = [c[1][0] - 100 for c in draws]
-check(not set(drawn) & {14, 15, 38, 41, 46, 75} and len(drawn) == 92,
-      "every object drawn mirrored but the copy, the counter top and what is on the mirror wall (%d drawn)" % len(drawn))
-k = calls.index((FN_DRAW, [100 + 0, 0]))
+skipped = {14, 15, 38, 41, 46, UNSEEN} | set(CARDS)
+check(passes in (1, 2) and set(drawn) == set(range(98)) - skipped and
+      all(drawn.count(i) == passes for i in set(drawn) - {SEEN}) and 1 <= drawn.count(SEEN) <= passes,
+      "every object mirrored but the copy, the counter top, what is on the mirror wall and the one whose reflection "
+      "the glass cannot show (%d passes, %d draws)" % (passes, len(drawn)))
+k = calls.index((FN_DRAW, [100 + SEEN, 0]))
 check(calls[k - 4: k] == [(FN_SET_SLOT, [0x1A, SCRATCH]), (FN_RSTATES, [MODELS, ROOM + 0x920]),
                           (FN_SET_SLOT, [0x3A, MATERIALS + 0x4C * 300]), (FN_SET_SLOT, [0x3B, MATERIALS + 0x4C * 400])],
       "an object as the room loop draws it: world matrix, render states, its materials, the model")
-mat = [u2f(w) for w in g.host.scratch[0]]
-check(len(g.host.scratch) == 92 and abs(mat[2] + 0.5) < 1e-6 and abs(mat[1] - 0.25) < 1e-6 and
-      abs(mat[14] - (2 * 13025.0 - 13060.0)) < 1e-3 and abs(mat[12] - 9700.0) < 1e-3 and mat[15] == 1.0,
+k = calls.index((FN_DRAW, [100 + 3, 0]))
+check(calls[k - 2: k] == [(FN_SET_SLOT, [0x1A, SCRATCH]), (FN_RSTATES, [MODELS + 0x98 * 3, ROOM + 0x920 + 12])],
+      "materials the slots already hold are not set again (object 3 has object 2's)")
+mat = [u2f(w) for w in g.host.scratch[drawn.index(2)]]  # (object 2: rows 1, 0.25, 0.5 / 0 1 0 / 0 0 1)
+check(abs(mat[2] + 0.5) < 1e-6 and abs(mat[1] - 0.25) < 1e-6 and
+      abs(mat[14] - (2 * 13025.0 - 13066.0)) < 1e-3 and abs(mat[12] - 9704.0) < 1e-3 and mat[15] == 1.0,
       "its matrix mirrored about the glass (z = 13025): the axes' z negated, the origin's z to 26050 - z")
 check(all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15)), "the copy not drawn with the reflection")
 room_draw(g, room=0x00500000)
@@ -1299,16 +1354,18 @@ m.log_writes = m.log_reads = False
 m.config["show_hidden_objects"] = 1
 g.frame(1)
 room_draw(g)
-check(len([c for c in g.host.now if c[0] == FN_DRAW]) == 92 and all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15)),
+check(len([c for c in g.host.now if c[0] == FN_DRAW]) == len(drawn) and
+      all(m.ee[OBJ_FLAGS + i] & 1 == 0 for i in (14, 15)),
       "Show Hidden Objects on: the copy's flags cleared right before the reflection is drawn")
 m.config["show_hidden_objects"] = 0
 g.frame(1)
-# Switched off: the masks and the current cut's flags as the game's; the room draw draws nothing.
+# Switched off: the masks, the current cut's flags and the glow cards' bytes as the game's; nothing drawn.
 m.config["enabled"] = 0
 g.frame(1)
 check(all(mask_bits(m, c, i) == 1 for c in range(2) for i in (14, 15, 75)) and
-      all(m.ee[OBJ_FLAGS + i] & 1 == 1 for i in (14, 15, 75)),
-      "switched off: every mask and the copy's and glow card's flags back as the game's")
+      all(m.ee[OBJ_FLAGS + i] & 1 == 1 for i in (14, 15)),
+      "switched off: every mask and the copy's flags back as the game's")
+check(all(zwrite(m, i) == 1 for i in CARDS), "switched off: the glow cards' depth write back as the game's")
 room_draw(g)
 check(not g.host.now and not g.host.scratch, "switched off: the room draw draws nothing")
 m.config["enabled"] = 1
