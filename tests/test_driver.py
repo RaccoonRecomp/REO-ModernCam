@@ -1172,6 +1172,54 @@ m.ee[CHAR + 0x08] = 1
 m.ee_set_u32(CHAR + 0xF80, 0)
 check(not code_touched(m), "no game code read or written")
 
+print("== 29. handed back to a cutscene: the game's own controls - no bind acts, the mouse is free, the gun's own "
+      "elevation")
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+g.host.device = 2  # Keyboard & Mouse: while it drives the camera holds the mouse
+m.config["cinematic_yield"] = 1
+g.frame(5)
+check(g.host.mouse_cap == 1 and g.host.requested["camera.freeAim"] == 1, "driving: the mouse held, free aim on")
+for _ in range(8):
+    m.ee_set_f32(CAM_EYE, 77777.0)
+    g.frame(1)
+check(g.host.status[0] == 3, "status: handed back to a cutscene")
+check(g.host.requested["camera.freeAim"] == 0, "camera.freeAim off: the gun's elevation servo is the game's again")
+check(g.host.mouse_cap == 0 and g.host.hidden == 0 and g.host.pad_ovr == 0,
+      "the mouse free, no bind hidden from the game, no stick centred")
+writes, logs = len(g.host.config_writes), len(g.host.logs)
+m.ee_set_u16(CHAR + 0xBC8, 0x2000)  # the game's servo raised the gun (aim up)
+g.host.held = SWAP | AIM | CAPTURE  # R3, the left trigger and C pressed while handed back
+g.frame(3)
+g.host.held = 0
+g.frame(3)
+check(g.host.status[0] == 3 and g.host.requested["camera.freeAim"] == 0, "still handed back, free aim still off")
+check(len(g.host.config_writes) == writes and not any("shoulder" in s or "mouse-look" in s
+                                                       for s in g.host.logs[logs:]),
+      "Swap Shoulder (R3) and Free Cursor (C) do nothing while handed back: no side saved (%s)"
+      % g.host.config_writes[writes:])
+check(m.ee_s16(CHAR + 0xBC8) == 0x2000, "the gun's elevation stays the game's while the Aim bind is held (0x%04x)"
+      % (m.ee_s16(CHAR + 0xBC8) & 0xFFFF))
+check(g.host.mouse_cap == 0 and g.host.hidden == 0 and g.host.pad_ovr == 0,
+      "the mouse stays free, nothing hidden or centred after the binds were pressed")
+g.frame(20)  # stick neutral
+g.host.ly = 1.0
+for _ in range(10):
+    g.frame(1)
+    g.pz += 5.0  # the game moves her
+check(g.host.status[0] == 2 and g.host.requested["camera.freeze"] == 1, "she walks: the camera drives again")
+check(g.host.requested["camera.freeAim"] == 1 and g.host.mouse_cap == 1, "free aim on again, the mouse held again")
+g.host.ly = 0.0
+g.frame(3)
+g.host.held = SWAP
+g.frame(1)
+g.host.held = 0
+g.frame(1)
+check(("shoulder", -50.0) in g.host.config_writes[writes:], "Swap Shoulder works again once it drives (%s)"
+      % g.host.config_writes[writes:])
+check(not code_touched(m), "no game code read or written")
+
 print("== 26. J's Bar's restroom mirrors: the room reflected at the room's draw while the camera drives there")
 ROOM = 0x0049EEF0
 OBJ_FLAGS, OBJ_COUNT, OBJ_MATRIX = 0x0049F790, 0x0049F762, 0x0049FA10

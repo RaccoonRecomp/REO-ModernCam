@@ -37,6 +37,11 @@
 - **The restroom's light bars**: each bulb's glow card is drawn as the fixed camera shows it; seen from the side the
   fixed camera never sees, its glow covered the bulbs behind it like a flat board (it is then drawn without writing
   depth).
+- **Handed back to a cutscene, the controls are the game's own** (Yield During Cutscenes): until the camera resumes,
+  aiming up and down with the left stick moves the gun as in the original (free gun elevation is off), the camera's
+  binds do nothing, and on Keyboard & Mouse the mouse stays free. Before, free gun elevation stayed on, so the gun did
+  not follow the stick; Swap Shoulder still changed the side and saved it, Free Cursor, Recenter, Switch View and the
+  reveal camera still reacted; and the camera took the mouse back right after handing back.
 - One setting added (Lock On Enemy, 117 settings). `patches.json` has one site more: the mark `camera.roomDraw`
   (submain.bin), for the mirrors.
 

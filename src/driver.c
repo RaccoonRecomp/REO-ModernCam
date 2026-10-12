@@ -346,7 +346,8 @@ static void freeze(void) {
 
 static void sync_engine_state(const Mc_Config* cfg) {
     f32 wantNear = mc_clampf(cfg->drawDistance, 0.1f, 1.0f);
-    u32 wantFreeAim = cfg->modernAim && cfg->freeAim;
+    // (Handed back to a cutscene: the gun's elevation is the game's own until the camera resumes.)
+    u32 wantFreeAim = cfg->modernAim && cfg->freeAim && !s.cineYield;
 
     // Draw distance (ModernCam's set_cull_scale): the table it scales is the near-camera hide radii on this disc.
     // Below 1 they shrink as in the exe; they are never enlarged (that hid nearby characters), so a saved value above
@@ -424,7 +425,7 @@ static u32 check_camera_taken(const Mc_Config* cfg) {
             s.cineTakes[s.cineTakeCount++] = s.now;
         }
         if (s.cineTakeCount >= need) {
-            // Hand everything back: freeze, cut, draw distance, hidden objects, input transforms.
+            // Hand everything back: freeze, cut, draw distance, hidden objects, input transforms, free aim.
             s.cineYield = 1;
             s.cineTakeCount = 0;
             s.haveCineNeutral = 0;
@@ -432,6 +433,11 @@ static u32 check_camera_taken(const Mc_Config* cfg) {
             s.divCount = 0;
             mc_feature(MC_FEAT_FREEZE, 0);
             s.frozen = 0;
+            if (s.freeAimOn) {
+                mc_set_aim_angle_deg(0.0f);
+                s.freeAimOn = 0;
+            }
+            mc_feature(MC_FEAT_FREEAIM, 0);
             if (s.cutForced >= 0) {
                 mc_release_cut();
             }
@@ -490,6 +496,9 @@ static u32 cinematic_wait(const Mc_Config* cfg, f32 lx, f32 ly) {
         s.haveLastWritten = 0;
         mc_follow_reset(&s.follow);
         freeze();
+        // Free aim as sync_engine_state wants it while the camera drives (from this frame on, as before the yield).
+        s.freeAimOn = cfg->modernAim && cfg->freeAim;
+        mc_feature(MC_FEAT_FREEAIM, s.freeAimOn);
         evt("[evt] cinematic over: camera resumed", 0, 0);
     }
     return s.cineYield;
@@ -863,6 +872,37 @@ static void driver_frame(void) {
     pressed = held & ~s.prevActs;
     s.prevActs = held;
 
+    inputMoving = mc_absf(lx) > 0.1f || mc_absf(ly) > 0.1f;
+    // The player moves her: the camera device's movement (stick, d-pad, W/A/S/D) or the game's own movement actions for
+    // her, whichever device the game is played with.
+    if (inputMoving || mc_player_move_held()) {
+        s.moveIdle = 0.0f;
+    } else {
+        s.moveIdle += dt;
+    }
+
+    // ---- Aim
+    aiming = (held & REO_CAM_ACT_AIM) != 0;
+    aimReal = aiming;
+    blend = aimReal ? cfg.aimBlendIn : cfg.aimBlendOut;
+    if (!(blend > 0.0f)) {
+        blend = cfg.aimBlend; // the exe's aim_blend fallback
+    }
+    s.aimAmt += ((aimReal ? 1.0f : 0.0f) - s.aimAmt) * mc_smooth_alpha(mc_clampf(blend, 0.02f, 1.0f), dt);
+    aimingNow = s.aimAmt > 0.1f;
+
+    // ---- Waiting out a cinematic: handed back, the controls are the game's own - the camera's binds do nothing, the
+    // mouse stays free, the gun's elevation is the game's (sync_engine_state) - until she moves again
+    if (s.cineYield) {
+        s.status = REO_CAM_STATUS_YIELDED;
+        if (cinematic_wait(&cfg, lx, ly)) {
+            send_status();
+            return;
+        }
+        s.status = REO_CAM_STATUS_DRIVING;
+    }
+
+    // ---- The camera's own actions (its binds)
     if (pressed & REO_CAM_ACT_CAPTURE) {
         s.captureOn = !s.captureOn;
         evt("[evt] mouse-look:", 1, (s32)s.captureOn);
@@ -898,34 +938,6 @@ static void driver_frame(void) {
     if (pressed & REO_CAM_ACT_ALTVIEW) {
         s.altView = !s.altView;
         evt("[evt] alt view:", 1, (s32)s.altView);
-    }
-    inputMoving = mc_absf(lx) > 0.1f || mc_absf(ly) > 0.1f;
-    // The player moves her: the camera device's movement (stick, d-pad, W/A/S/D) or the game's own movement actions for
-    // her, whichever device the game is played with.
-    if (inputMoving || mc_player_move_held()) {
-        s.moveIdle = 0.0f;
-    } else {
-        s.moveIdle += dt;
-    }
-
-    // ---- Aim
-    aiming = (held & REO_CAM_ACT_AIM) != 0;
-    aimReal = aiming;
-    blend = aimReal ? cfg.aimBlendIn : cfg.aimBlendOut;
-    if (!(blend > 0.0f)) {
-        blend = cfg.aimBlend; // the exe's aim_blend fallback
-    }
-    s.aimAmt += ((aimReal ? 1.0f : 0.0f) - s.aimAmt) * mc_smooth_alpha(mc_clampf(blend, 0.02f, 1.0f), dt);
-    aimingNow = s.aimAmt > 0.1f;
-
-    // ---- Waiting out a cinematic
-    if (s.cineYield) {
-        s.status = REO_CAM_STATUS_YIELDED;
-        if (cinematic_wait(&cfg, lx, ly)) {
-            send_status();
-            return;
-        }
-        s.status = REO_CAM_STATUS_DRIVING;
     }
 
     // ---- The followed character (the local player, or the watched one)

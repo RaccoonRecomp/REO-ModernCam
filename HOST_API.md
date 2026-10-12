@@ -112,7 +112,8 @@ The string settings are read by the host, not by the mod:
 The mod uses two features, both from `patches.json` (section 5):
 - `camera.freeze`: on while the camera drives a live level; off when it hands back, in cutscene yield, and while no
   level is live.
-- `camera.freeAim`: on while the settings Modern Aim and Free Gun Elevation are both on.
+- `camera.freeAim`: on while the settings Modern Aim and Free Gun Elevation are both on, except in cutscene yield (the
+  gun's elevation is the game's own until the camera resumes) and when the camera is switched off.
 
 A request takes effect at the next vblank start. The mod only sends a request when its wish changes.
 
