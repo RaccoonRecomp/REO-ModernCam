@@ -42,6 +42,11 @@
   binds do nothing, and on Keyboard & Mouse the mouse stays free. Before, free gun elevation stayed on, so the gun did
   not follow the stick; Swap Shoulder still changed the side and saved it, Free Cursor, Recenter, Switch View and the
   reveal camera still reacted; and the camera took the mouse back right after handing back.
+- **The camera window opens with the controller's View button** too (Resident Evil Outbreak Recompiled 1.5.1):
+  pressed and let go on its own while the mod is switched on in Mods (also while the camera's own On / Off is Off),
+  over the game and in the menus; View, F8 or Escape / Back closes it. View + Menu stays the program's menu, and
+  while the mod is switched off in Mods View is the game's Select.
+- It needs Resident Evil Outbreak Recompiled 1.5.1 or newer (HOST_API.md contract 2).
 - One setting added (Lock On Enemy, 117 settings). `patches.json` has one site more: the mark `camera.roomDraw`
   (submain.bin), for the mirrors.
 

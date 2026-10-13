@@ -24,11 +24,12 @@ uses was found again on this disc.
 
 ## Requirements
 
-- **Resident Evil Outbreak Recompiled 1.5.0 or newer.**
+- **Resident Evil Outbreak Recompiled 1.5.1 or newer** (the host API's contract 2, [HOST_API.md](HOST_API.md): the
+  room-draw event for the restroom mirrors).
 - **Your own legal copy** of Resident Evil Outbreak (USA), SLUS-20765, disc version 2.00. This mod contains no disc
   image and no game files.
 
-> **Status.** Resident Evil Outbreak Recompiled 1.5.0 prepares the game's code from your own disc on your PC. The
+> **Status.** Resident Evil Outbreak Recompiled prepares the game's code from your own disc on your PC. The
 > camera can drive only in a prepared game that also has the camera's code sites compiled in (below): the program
 > compiles them in when it prepares the game, so the camera works as soon as you switch the mod on.
 
@@ -45,8 +46,8 @@ so.
 1. Download `reo-modern-camera-2.1.0.zip` from this repository's **Releases** page (it is also in the
    [`release`](release) folder). Do not unpack it.
 2. In Resident Evil Outbreak Recompiled, open **Mods**, choose **Install Mods** and pick the zip.
-3. Make sure the mod is switched on in the list. Press **F8** (or **Camera Window** next to Configure on the Mods tab)
-   to open the camera window and tune it.
+3. Make sure the mod is switched on in the list. Press **F8**, the controller's **View** button, or **Camera Window**
+   next to Configure on the Mods tab to open the camera window and tune it.
 
 The Mods tab checks the whole archive before it writes anything and installs the mod into its own folder,
 `mods\reo-modern-camera\`. To install by hand instead, unpack the zip into your mods folder so that
@@ -93,7 +94,9 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
   in the game. The light bars' glow cards look as the fixed camera shows them (from the other side they covered the
   bulbs behind them like a flat board).
 - **Doors and cutscenes**: the camera gives way when the game moves it, and can yield during cutscenes and come back
-  when you move.
+  when you move. Handed back to a cutscene, the controls are the game's own until the camera comes back: aiming up
+  and down with the left stick moves the gun as in the original, the camera's buttons do nothing, and on Keyboard &
+  Mouse the mouse stays free.
 
 Default controls (ModernCam's File 1 set, all rebindable in the camera window's Controls tab): Aim = left trigger (on
 keyboard and mouse: right mouse button), Shoot = right trigger, Reload = X / Square, Sprint = L3, Swap Shoulder = R3,
@@ -101,8 +104,10 @@ Free Cursor = C. **Steered By** chooses the device: Gamepad (Auto, the most acti
 
 ## The camera window
 
-- Opens with **F8** - in the menus and over the running game - or with **Camera Window** on the Mods tab. F8 or Escape
-  / Back closes it. It does not open over exclusive fullscreen (use Borderless or Windowed).
+- Opens with **F8** - in the menus and over the running game -, with the controller's **View** button while the mod is
+  switched on in Mods (pressed and let go on its own, also while the camera's own On / Off is Off; View + Menu stays
+  the program's menu), or with **Camera Window** on the Mods tab. F8, View or Escape / Back closes it. It does not
+  open over exclusive fullscreen (use Borderless or Windowed).
 - Tabs as in ModernCam's window: **Camera**, **Look**, **Aiming**, **Controls**, then **Advanced** with every value
   ModernCam reads but hides. Every change reaches the running camera at the next game frame and is saved within a
   quarter of a second.
