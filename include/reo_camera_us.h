@@ -98,6 +98,22 @@
 // every vblank: set in the game frame after each cut change with the stick pushed, back to 0 when it is let go).
 #define REO_ACT_WALK_HOLD  0x32
 #define REO_CHAR_AI_GATE   0xFF0  // u8, 0 = player-driven
+// The game's stick walking (game.bin 0x006621F0; the per-character update 0x0066B500 calls it after the mapper, so it
+// reads the stick group the mapper copied from the mapped record in that game frame). With the left stick's magnitude
+// at REO_WALK_STICK_MIN or more it adds the camera block's yaw (look-at minus eye, atan2(x, z) in 65536ths of a turn,
+// truncated: submain 0x00376E70) and the stick's angle, each with its low 4 bits cleared, and compares the sum with her
+// heading. Up to REO_WALK_TURN_LIMIT from her heading (its table at 0x00712B30) her actions are forward plus a turn
+// toward it, at the game's own turning speed (twice as fast beyond 90 degrees, four times beyond 135: 0x0065F580);
+// further round it turns her round the same way, except while an enemy is near her: 0x0065F0C0 finds a live, targetable
+// enemy record (REO_US_ENEMY_BASE) within 300 units (320 while she already steps back), and then she steps back facing
+// the way she faces (her action REO_ACTION_BACK_STEP) - unless she dashes (REO_ACT_DASH held), REO_CHAR_TURNS_ROUND is
+// set or she is not player-driven, when she turns round all the same.
+#define REO_WALK_STICK_MIN   16
+#define REO_WALK_TURN_LIMIT  0x5000 // 112.5 degrees
+#define REO_STANCE_NORMAL    1      // REO_CHAR_STANCE: the weapon down
+#define REO_ACTION_BACK_STEP 2      // REO_CHAR_ACTION: 0 standing, 1 walking / turning, 2 the step back
+#define REO_CHAR_FLAGS       0xBA0  // u32 (the walking input sets 0x2000 while the stick is pushed)
+#define REO_CHAR_TURNS_ROUND 0x80
 #define REO_AIM_ANGLE_MAX  0x1FFF
 // u32, the aim target (the game's auto-aim lock): when she raises the weapon with the aim action, the aim-stance entry
 // 0x0064E5C0 stores the target finder's result (0x0065F060 -> 0x0065ED70: the nearest enemy in range and in front of

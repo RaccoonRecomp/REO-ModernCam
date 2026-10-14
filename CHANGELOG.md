@@ -2,21 +2,27 @@
 
 ## 2.1.1
 
-- **The left stick walks her where you push it from the camera's view, also while you turn the camera** (Turn to
-  Camera Off and Keep Behind Character off, the defaults). As before, the left stick only walks her - up away from the
-  camera, down toward it, left and right to the sides of the view, with the game's own walking and turning, so she
-  faces the way she walks - walking never turns the camera, and the right stick alone turns it. But the game holds her
-  walking direction when the room's fixed camera cuts while she walks, so that the new angle does not turn her, and the
-  room's cuts still change while the camera drives (you do not see them): after one she walked on the way she went
-  until the stick was let go. Turning the camera with the right stick then no longer turned her walk with it (J's Bar,
-  walking up while the camera turned 233 degrees: her walk ended 172 degrees off, toward the camera), and a cut while
-  she turned into a new direction left her walking 9 degrees off it. Now that hold is let go while the camera drives
-  (it lasts one game frame): she keeps walking where the stick points from your view, through every cut, also while
-  the right stick turns the camera, at the game's own turning speed.
-- Nothing else changes: the d-pad keeps the game's own controls (forward, turn, step back), and so does the left
-  stick pushed nearly straight behind her (she steps back, facing the way she faced, as the game does). With Turn to
-  Camera Moving or Always, or Keep Behind Character on, everything is as in 2.1.0. Switched off (in Mods or with its own
-  On / Off), the controls are the original's exactly. No setting added or changed; `patches.json` is unchanged.
+- **The left stick walks her where you push it from the camera's view, and she always faces the way she walks**
+  (Turn to Camera Off and Keep Behind Character off, the defaults). The left stick only walks her - up away from the
+  camera, down toward it, left and right to the sides of the view - walking never turns the camera, and the right stick
+  alone turns it. Two habits of the game's own walking, made for its fixed angles, got in the way; while the camera
+  drives both are now undone:
+  - Pushed further round than 112.5 degrees from where she faced (pulling the stick back toward the camera while she
+    walked away, or a push behind her while she stood), the game stepped her back, still facing away, whenever an enemy
+    was near her (within 300 units: in J's Bar the restroom's zombie is enough). Now she turns round toward the stick,
+    as the game turns her where no enemy is near, at the game's own turning speed (a half turn takes about 0.7 s from
+    standing and about a second while she walks), and walks that way. With the dash held (Sprint) the game turns her
+    round itself, as before.
+  - The game holds her walking direction when the room's fixed camera cuts while she walks, so that the new angle does
+    not turn her. The room's cuts still change while the camera drives (you do not see them), so after one she walked
+    on the way she went until the stick was let go, and turning the camera with the right stick no longer turned her
+    walk (J's Bar, walking up while the camera turned 233 degrees: her walk ended 172 degrees off, toward the camera).
+    That hold is now let go (it lasts one game frame).
+- On keyboard and mouse, W / A / S / D walk her the same way. Nothing else changes: the d-pad keeps the game's own
+  controls (forward, turn, step back); aiming, Lock On Enemy, the camera's shoulder, the restroom mirrors and the View
+  button are as in 2.1.0. With Turn to Camera Moving or Always, or Keep Behind Character on, everything is as in 2.1.0.
+  Switched off (in Mods or with its own On / Off), the controls are the original's exactly. No setting added or
+  changed; `patches.json` is unchanged.
 
 ## 2.1.0
 

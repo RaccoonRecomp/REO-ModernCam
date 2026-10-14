@@ -260,6 +260,7 @@ class Game:
         self.padcount = 1
         self.pad_map = True   # the host calls recomp_on_pad_map
         self.held_word = 0    # what the game's pad refresh puts in the mapped record each frame
+        self.lstick = 0x40001234  # and its left stick group's first word (s16 magnitude, s16 angle)
         self.mapped = []      # the held word the mapper loaded, per frame
         self.combine = self.default_combine
         m.ee_set_u32(PAD_PTR, PADBLK)
@@ -300,7 +301,7 @@ class Game:
             self.padcount += 1
             # the game refreshes the mapped record every frame (and its stick groups)
             m.ee_set_u32(HELD_WORD, self.held_word)
-            m.ee_set_u32(PAD_REC + 0x20, 0x40001234)
+            m.ee_set_u32(PAD_REC + 0x20, self.lstick)
             m.ee_set_u32(PAD_REC + 0x28, 0x40005678)
             self.write()
             m.call(m.symbols["Mcam_OnPlayMain"])
@@ -1278,6 +1279,158 @@ g.frame(40)
 walk_held_at_cut(m)
 g.frame(1)
 check(m.ee_u16(WALK_HOLD) == 0, "no pad-map event from the host: let go by the per-frame fallback")
+check(not code_touched(m), "no game code read or written")
+
+print("== 31. the left stick pointing further round from her than the game's walking turns (112.5 degrees; there, with "
+      "an enemy near, it would step her back facing away): the stick's angle turned toward her to just inside that, so "
+      "the game turns her toward the stick; only her own walking, only at Turn to Camera Off and Keep Behind Character "
+      "off")
+LIMIT = 0x5000
+
+
+def s16(v):
+    v &= 0xFFFF
+    return v - 0x10000 if v & 0x8000 else v
+
+
+def cam_units(m):
+    # The game's camera yaw (submain 0x00376E70): look-at minus eye, atan2(x, z) in 65536ths of a turn, truncated.
+    e = [m.ee_f32(CAM_EYE + 4 * i) for i in range(3)]
+    t = [m.ee_f32(CAM_TGT + 4 * i) for i in range(3)]
+    return int(math.atan2(t[0] - e[0], t[2] - e[2]) * 32768.0 / math.pi)
+
+
+def walk_diff(m, angle):
+    # What the game's walking input (game.bin 0x006621F0) compares: camera yaw + stick angle (low 4 bits cleared each)
+    # minus her heading.
+    return s16(((cam_units(m) & 0xFFF0) + (angle & 0xFFF0) - m.ee_u16(CHAR + 0x92)) & 0xFFFF)
+
+
+def stick_round(g, degrees, mag=0x7F):
+    # The left stick group the game's pad refresh writes for a push `degrees` round from her heading (+ = her left),
+    # from the camera the mod wrote last.
+    a = (g.m.ee_u16(CHAR + 0x92) + int(round(degrees * 65536 / 360)) - cam_units(g.m)) & 0xFFFF
+    g.lstick = (a << 16) | mag
+    return a
+
+
+def walking(m, action=1):
+    m.ee[CHAR + 0x08] = 1       # weapon down
+    m.ee[CHAR + 0x54F] = action  # 0 standing, 1 walking, 2 the step back
+
+
+def angle_now(m):
+    return m.ee_u16(PAD_REC + 0x22)
+
+
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+walking(m)
+g.frame(30)
+xy = m.ee_u32(PAD_REC + 0x24)
+for rnd, side in ((150.0, 1), (-150.0, -1), (125.0, 1), (-170.0, -1), (170.0, 1)):
+    stick_round(g, 0.0)
+    g.frame(1)  # a push she walks straight on with first: no turn begun
+    a = stick_round(g, rnd)
+    g.frame(1)
+    d = walk_diff(m, angle_now(m))
+    check(abs(d) <= LIMIT and abs(d) >= LIMIT - 0x110 and (d > 0) == (side > 0) and angle_now(m) != a and
+          m.ee_u16(PAD_REC + 0x20) == 0x7F and m.ee_u32(PAD_REC + 0x24) == xy,
+          "%+.0f degrees round: the game reads %+.1f, on her %s, inside its turn (%.1f); the magnitude and x / y as "
+          "the game wrote them" % (rnd, d * 360.0 / 65536, "left" if side > 0 else "right", LIMIT * 360.0 / 65536))
+for rnd in (0.0, 45.0, -90.0, 110.0, -111.0):
+    a = stick_round(g, rnd)
+    g.frame(1)
+    check(angle_now(m) == a, "%+.0f degrees round: the stick's angle as the game wrote it" % rnd)
+# Straight behind her, an analog stick wobbles from one side to the other: the side the turn began on is kept.
+stick_round(g, 179.0)
+g.frame(1)
+first = walk_diff(m, angle_now(m)) > 0
+sides = []
+for rnd in (-179.0, 178.0, -178.0, -177.0):
+    stick_round(g, rnd)
+    g.frame(1)
+    sides.append(walk_diff(m, angle_now(m)) > 0)
+check(all(x == first for x in sides), "straight behind her, the stick wobbling across: she keeps turning to her %s"
+      % ("left" if first else "right"))
+stick_round(g, -100.0)
+g.frame(1)
+stick_round(g, -150.0)
+g.frame(1)
+check(walk_diff(m, angle_now(m)) < 0, "a new push further round on the other side: turned to that side")
+# Not where the game turns her round itself, nor outside her own walking.
+dash = [bit for i, bit in enumerate((0x100, 0x10, 0x20))
+        if m.ee_u32(0x002343C0 + 12 * (m.ee[CONTROL_TYPE] & 3) + 4 * i) & 0x10]
+cases = [("the stick under the game's walking magnitude (15)", lambda: setattr(g, "lstick", (g.lstick & ~0xFFFF) | 15),
+          lambda: setattr(g, "lstick", (g.lstick & ~0xFFFF) | 0x7F)),
+         ("the weapon raised (stance 2)", lambda: m.ee.__setitem__(CHAR + 0x08, 2), lambda: walking(m)),
+         ("grabbed (stance 5)", lambda: m.ee.__setitem__(CHAR + 0x08, 5), lambda: walking(m)),
+         ("another action (0x1C, a reload)", lambda: m.ee.__setitem__(CHAR + 0x54F, 0x1C), lambda: walking(m)),
+         ("not player-driven", lambda: m.ee.__setitem__(CHAR + 0xFF0, 1), lambda: m.ee.__setitem__(CHAR + 0xFF0, 0)),
+         ("her turn-round flag (+0xBA0 & 0x80)", lambda: m.ee_set_u32(CHAR + 0xBA0, 0x80),
+          lambda: m.ee_set_u32(CHAR + 0xBA0, 0))]
+
+def sprint(on):
+    # The Sprint bind (L3 by default) with the camera's movement input: the mod presses the game's dash button (the
+    # game's own one is taken away while Sprint is bound).
+    g.host.held = SPRINT if on else 0
+    g.host.ly = 1.0 if on else 0.0
+
+
+cases.append(("the dash held (Sprint)", lambda: sprint(True), lambda: sprint(False)))
+for what, on, off in cases:
+    on()
+    a = stick_round(g, 160.0, g.lstick & 0xFFFF)
+    g.frame(1)
+    check(angle_now(m) == a, "%s: the stick's angle left as it is" % what)
+    off()
+check(len(dash) == 1, "the dash is one of square / cross / circle under the control type (%s)" % dash)
+g.held_word = dash[0]
+stick_round(g, 0.0)
+g.frame(1)
+stick_round(g, 160.0)
+g.frame(1)
+check(not g.mapped[-1] & dash[0] and 0 < walk_diff(m, angle_now(m)) <= LIMIT, "the game's own dash button: taken "
+      "away while Sprint is bound (as 2.1.0), so it does not dash and she is turned")
+g.held_word = 0
+for action in (0, 2):
+    walking(m, action)
+    stick_round(g, 160.0)
+    g.frame(1)
+    check(0 < walk_diff(m, angle_now(m)) <= LIMIT, "her action %d (%s): turned" % (action, ("standing", "", "the step back")[action]))
+walking(m)
+check(not code_touched(m), "no game code read or written")
+for key, value, what in (("rotate_mode", 1, "Keep Behind Character on"), ("turn_to_camera", 1, "Turn to Camera Moving"),
+                         ("turn_to_camera", 2, "Turn to Camera Always"), ("enabled", 0, "the camera's own switch Off")):
+    m = new_machine()
+    g = Game(m)
+    m.config[key] = value
+    walking(m)
+    g.frame(30)
+    a = stick_round(g, 160.0)
+    g.frame(3)
+    check(angle_now(m) == a, "%s: the stick's angle left as it is (as 2.1.0)" % what)
+m = new_machine()
+g = Game(m)
+m.config["cinematic_yield"] = 1
+walking(m)
+g.frame(5)
+for _ in range(8):
+    m.ee_set_f32(CAM_EYE, 77777.0)
+    g.frame(1)
+a = stick_round(g, 160.0)
+g.frame(3)
+check(g.host.status[0] == 3 and angle_now(m) == a, "handed back to a cutscene: the stick's angle left as it is")
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+g.pad_map = False
+walking(m)
+g.frame(40)
+stick_round(g, -160.0)
+g.frame(1)
+check(-LIMIT <= walk_diff(m, angle_now(m)) < 0, "no pad-map event from the host: turned by the per-frame fallback")
 check(not code_touched(m), "no game code read or written")
 
 print("== 26. J's Bar's restroom mirrors: the room reflected at the room's draw while the camera drives there")

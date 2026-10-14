@@ -65,11 +65,14 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
   raw mouse look (the Free Cursor button, C, releases and recaptures the mouse).
 - **Walking** (Turn to Camera Off and Keep Behind Character off, the defaults): the left stick (on keyboard and mouse
   W / A / S / D) walks her where you push it from the camera's view - up away from the camera, down toward it, left
-  and right to the sides of the view - with the game's own walking: she turns to face the way she walks (pushed nearly
-  straight behind her, more than about 147 degrees off her facing, she steps back, as the game does), and walking never
-  turns the camera; the right stick alone turns it. The game's hold of her walking direction at the room's camera cuts
-  is let go while the camera drives, so turning the camera while she walks turns her walk with it. The d-pad keeps the
-  game's own controls.
+  and right to the sides of the view - with the game's own walking and turning, so she always faces the way she walks;
+  walking never turns the camera, and the right stick alone turns it. Two habits of the game's walking that belong to
+  its fixed angles are undone while the camera drives. Pushed further round than 112.5 degrees from where she faces
+  (down while she walks away, for example) while an enemy is near her, the game would step her back, still facing
+  away; she turns round toward the stick instead, at the game's own turning speed, and walks that way, as she does
+  where no enemy is near. And the game's hold of her walking direction at the room's camera cuts is let go, so turning
+  the camera while she walks turns her walk with it. The d-pad keeps the game's own controls (its down still steps her
+  back), and walking while she aims is as before.
 - **Framing**: Main, Aim and Alt rigs, each with distance, left / right, height, field of view, look drop and pitch
   trim. An Aim or Alt value follows Main until you set it ("Custom"), as in ModernCam.
 - **The camera stays on her**: it turns only when you turn it, and with Keep Behind Character with her facing while you

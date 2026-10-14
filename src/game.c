@@ -1473,6 +1473,61 @@ void mc_padmap_release_walk_hold(u32 charRecord) {
     }
 }
 
+// The actions the mapper makes of a mapped held word (0x001B0C68..0x001B0CC8): square, cross and circle through the
+// control type's row of the button-map table, every other bit as it is.
+static u32 mapped_actions(u32 held) {
+    u32 row = REO_US_BTN_MAP_TABLE + 12 * (Mc_ReadU8(REO_US_CONTROL_TYPE) & 3);
+    u32 out = held & ~(u32)(REO_SRC_SQUARE | REO_SRC_CROSS | REO_SRC_CIRCLE);
+
+    if (held & REO_SRC_SQUARE) out |= Mc_ReadU32(row);
+    if (held & REO_SRC_CROSS) out |= Mc_ReadU32(row + 4);
+    if (held & REO_SRC_CIRCLE) out |= Mc_ReadU32(row + 8);
+    return out;
+}
+
+// The stick's way round from her heading at which she is turned rather than stepped back: just inside
+// REO_WALK_TURN_LIMIT (a step of the game's yaw, 16, is 0.09 degrees), and the part of a turn round near straight behind
+// her in which the side the turn began on is kept (an analog stick held straight back wobbles across it).
+#define MC_WALK_TURN_TO   (REO_WALK_TURN_LIMIT - 0x100)
+#define MC_WALK_KEEP_SIDE 0x7000
+
+s32 mc_padmap_walk_turn(u32 heldWordAddr, u32 charRecord, s32 side) {
+    u32 stick = heldWordAddr - REO_PADREC_HELD + REO_PADREC_LSTICK;
+    u32 dir, dirQ;
+    s32 yaw, diff, want;
+    f32 dx, dz;
+
+    // Only where the game can step her back: her own walking (standing, walking, the step back) with the weapon down,
+    // player-driven, the stick pushed, and none of the game's own turns round (the dash, REO_CHAR_TURNS_ROUND).
+    if (Mc_ReadS16(stick) < REO_WALK_STICK_MIN || Mc_ReadU8(charRecord + REO_CHAR_STANCE) != REO_STANCE_NORMAL ||
+        Mc_ReadU8(charRecord + REO_CHAR_ACTION) > REO_ACTION_BACK_STEP || Mc_ReadU8(charRecord + REO_CHAR_AI_GATE) ||
+        (Mc_ReadU32(charRecord + REO_CHAR_FLAGS) & REO_CHAR_TURNS_ROUND) ||
+        (mapped_actions(Mc_ReadU32(heldWordAddr)) & REO_ACT_DASH)) {
+        return 0;
+    }
+    dx = Mc_ReadF32(REO_US_CAM_TARGET) - Mc_ReadF32(REO_US_CAM_EYE);
+    dz = Mc_ReadF32(REO_US_CAM_TARGET + 8) - Mc_ReadF32(REO_US_CAM_EYE + 8);
+    if (!Mc_IsSaneF32(dx) || !Mc_IsSaneF32(dz) || (dx == 0.0f && dz == 0.0f)) {
+        return 0;
+    }
+    // The game's sum: the camera's yaw and the stick's angle in its steps of 16, minus her heading.
+    yaw = (s32)(mc_atan2f(dx, dz) * (32768.0f / MC_PI));
+    dir = Mc_ReadU16(stick + 2);
+    diff = (s32)(s16)((((u32)yaw & 0xFFF0u) + (dir & 0xFFF0u) - Mc_ReadU16(charRecord + REO_CHAR_HEADING)) & 0xFFFFu);
+    if (diff >= -MC_WALK_TURN_TO && diff <= MC_WALK_TURN_TO) {
+        return 0;
+    }
+    // Further round: the stick's angle the game reads turned toward her heading, to just inside the limit on the side
+    // the stick lies (the side already turned to, near straight behind), so the game turns her toward it instead.
+    if (side == 0 || (diff > -MC_WALK_KEEP_SIDE && diff < MC_WALK_KEEP_SIDE)) {
+        side = diff > 0 ? 1 : -1;
+    }
+    want = side * MC_WALK_TURN_TO;
+    dirQ = ((dir & 0xFFF0u) - (u32)(diff - want) + 8u) & 0xFFF0u;
+    Mc_WriteU16(stick + 2, dirQ | (dir & 0xFu));
+    return side;
+}
+
 u32 mc_button_for_action(u32 actionBit) {
     // [square, cross, circle] action words for the player's control type, as the mapper reads them.
     static const u16 sSce[3] = { REO_SCE_SQUARE, REO_SCE_CROSS, REO_SCE_CIRCLE };

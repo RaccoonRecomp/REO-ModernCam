@@ -100,6 +100,12 @@ u32 mc_padmap_player_word(void);
 // The game's held walking direction of the character record (reo_camera_us.h, REO_ACT_WALK_HOLD) let go, so the left
 // stick walks her relative to the camera block again. Writes only when it is held.
 void mc_padmap_release_walk_hold(u32 charRecord);
+// At the pad-map mark, with the left stick pointing further round from her heading than the game's walking turns
+// (reo_camera_us.h, REO_WALK_TURN_LIMIT; there it steps her back while an enemy is near): the stick's angle the mapper is
+// about to copy turned toward her heading to just inside that, so the game turns her toward the stick and walks her
+// there. side is the side returned for the last game frame (+1 her left, -1 her right, 0 none); returns this frame's
+// (0: nothing written).
+s32 mc_padmap_walk_turn(u32 heldWordAddr, u32 charRecord, s32 side);
 // SCE bit of the button that performs an action under the current control type (0 if none).
 u32 mc_button_for_action(u32 actionBit);
 
