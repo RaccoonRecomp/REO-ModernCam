@@ -1465,6 +1465,14 @@ void mc_padmap_apply(u32 heldWordAddr, u32 pressSce, u32 suppressSce, u32 centre
     }
 }
 
+void mc_padmap_release_walk_hold(u32 charRecord) {
+    u32 addr = charRecord + REO_CHAR_ACT + REO_ACT_WALK_HOLD;
+
+    if (Mc_ReadU16(addr) != 0) {
+        Mc_WriteU16(addr, 0);
+    }
+}
+
 u32 mc_button_for_action(u32 actionBit) {
     // [square, cross, circle] action words for the player's control type, as the mapper reads them.
     static const u16 sSce[3] = { REO_SCE_SQUARE, REO_SCE_CROSS, REO_SCE_CIRCLE };

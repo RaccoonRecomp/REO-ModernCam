@@ -37,6 +37,7 @@ typedef struct {
     u32 supp;    // SCE bits taken from the game
     u32 centreL;
     u32 centreR;
+    u32 walkFree; // let go of the game's held walking direction (its own stick walking, relative to this camera)
     u32 active;
 } Mc_PadMap;
 
@@ -217,7 +218,7 @@ static void send_status(void) {
 static void input_neutral(void) {
     // Nothing of the camera reaches the game's input.
     s.map.active = 0;
-    s.map.press = s.map.supp = s.map.centreL = s.map.centreR = 0;
+    s.map.press = s.map.supp = s.map.centreL = s.map.centreR = s.map.walkFree = 0;
     s.framesSincePadMap = 0; // the mapper does not run for her outside a level: not a missing pad-map event
     reo_cam_input_hide(0);
     reo_pad_override(0);
@@ -1127,6 +1128,14 @@ static void driver_frame(void) {
     // Mouse, as the exe).
     centreR = cfg.ownLookStick && !kbm;
 
+    // With Turn to Camera Off and Keep Behind Character off (the defaults) the game's own stick walking moves her: the
+    // left stick walks her relative to the camera block, which is this camera, and she turns to face the way she walks.
+    // The game holds her walking direction when the room's fixed camera cuts while she walks (REO_ACT_WALK_HOLD), so
+    // that a new angle does not turn her; this view never cuts, so the hold is let go at the pad-map mark (game.c): she
+    // keeps walking where the stick points from this view, also while the right stick turns it. (Turn to Camera steers
+    // her itself; Keep Behind Character turns the camera with her.)
+    s.map.walkFree = cfg.turnToCamera == MC_TURN_OFF && !cfg.keepBehind;
+
     // The pad transform, applied at the camera.padMap mark (recomp_on_pad_map) in this game frame.
     s.map.press = pressBits;
     s.map.supp = suppBits;
@@ -1142,6 +1151,9 @@ static void driver_frame(void) {
             evt("[evt] no pad-map event from the host: applying the pad transform once per frame", 0, 0);
         }
         mc_padmap_apply(mc_padmap_player_word(), s.map.press, s.map.supp, s.map.centreL, s.map.centreR);
+        if (s.map.walkFree) {
+            mc_padmap_release_walk_hold(mc_char_base(mc_player_slot()));
+        }
     }
 
     // ---- Yaw: follow, free-look return, aim snap, recenter
@@ -1442,7 +1454,7 @@ void Mcam_OnPlayMain(void) {
 
 // The camera.padMap mark (exe 0x001B0C5C): the mapper is about to load the held word at heldWordAddr for the
 // character record charRecord. ModernCam's VBTN cave: `t4 = (t4 & KEEPMASK) | PRESS` and the stick groups, applied
-// here to her record only, exactly where the game reads them.
+// here to her record only, exactly where the game reads them; and her held walking direction let go (walkFree).
 RECOMP_CALLBACK("*", recomp_on_pad_map)
 void Mcam_OnPadMap(u32 heldWordAddr, u32 charRecord) {
     s.padMapCalls++;
@@ -1454,6 +1466,9 @@ void Mcam_OnPadMap(u32 heldWordAddr, u32 charRecord) {
         return;
     }
     mc_padmap_apply(heldWordAddr, s.map.press, s.map.supp, s.map.centreL, s.map.centreR);
+    if (s.map.walkFree) {
+        mc_padmap_release_walk_hold(charRecord);
+    }
 }
 
 // The camera.roomDraw mark (submain.bin 0x00372284): the room's draw loop, before a group's objects. J's Bar's restroom

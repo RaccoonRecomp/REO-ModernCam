@@ -12,7 +12,7 @@ sys.path.insert(0, HERE)
 from settings import S, EXE  # noqa: E402
 
 OUT = os.path.dirname(HERE)
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 
 NAME = "Resident Evil Outbreak — Modern Camera"
 SHORT = "Over-the-shoulder camera for Resident Evil Outbreak (NTSC-U v2.00)"

@@ -6,7 +6,7 @@ with the right stick or the mouse, with aiming, free gun elevation, a crosshair 
 
 This mod is a recreation. I studied Snippy's original Outbreak ModernCam mod for Resident Evil Outbreak and learned how to recreate it in my own way for Resident Evil Outbreak Recompiled. Snippy gave me the idea of doing this for the recompiled version, and all credit for the original camera design goes to him. Go check out Snippy's ModernCam for the PS2 version: [heysnippy.com](https://heysnippy.com/mods/outbreak-moderncam/) and [the video](https://youtu.be/lpQUNS5klBY).
 
-- Mod id `reo-modern-camera`, version **2.1.0**.
+- Mod id `reo-modern-camera`, version **2.1.1**.
 - 117 settings, every one of them changeable while you play.
 
 > Unofficial fan project, not affiliated with or endorsed by Capcom or Snippy. See [Legal](#legal).
@@ -43,7 +43,7 @@ so.
 
 ## Install
 
-1. Download `reo-modern-camera-2.1.0.zip` from this repository's **Releases** page (it is also in the
+1. Download `reo-modern-camera-2.1.1.zip` from this repository's **Releases** page (it is also in the
    [`release`](release) folder). Do not unpack it.
 2. In Resident Evil Outbreak Recompiled, open **Mods**, choose **Install Mods** and pick the zip.
 3. Make sure the mod is switched on in the list. Press **F8**, the controller's **View** button, or **Camera Window**
@@ -63,6 +63,13 @@ ModernCam's own File 1 defaults. It keeps a backup of the values it replaces.
 
 - **Look**: the right stick, with separate yaw and pitch speeds, inversion and pitch limits; on keyboard and mouse,
   raw mouse look (the Free Cursor button, C, releases and recaptures the mouse).
+- **Walking** (Turn to Camera Off and Keep Behind Character off, the defaults): the left stick (on keyboard and mouse
+  W / A / S / D) walks her where you push it from the camera's view - up away from the camera, down toward it, left
+  and right to the sides of the view - with the game's own walking: she turns to face the way she walks (pushed nearly
+  straight behind her, more than about 147 degrees off her facing, she steps back, as the game does), and walking never
+  turns the camera; the right stick alone turns it. The game's hold of her walking direction at the room's camera cuts
+  is let go while the camera drives, so turning the camera while she walks turns her walk with it. The d-pad keeps the
+  game's own controls.
 - **Framing**: Main, Aim and Alt rigs, each with distance, left / right, height, field of view, look drop and pitch
   trim. An Aim or Alt value follows Main until you set it ("Custom"), as in ModernCam.
 - **The camera stays on her**: it turns only when you turn it, and with Keep Behind Character with her facing while you

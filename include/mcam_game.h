@@ -97,6 +97,9 @@ void mc_pad_read(Mc_Pad* pad);
 void mc_padmap_apply(u32 heldWordAddr, u32 pressSce, u32 suppressSce, u32 centreLeft, u32 centreRight);
 // The mapped record's held word of the local player (the address the mapper's $a2 holds for her).
 u32 mc_padmap_player_word(void);
+// The game's held walking direction of the character record (reo_camera_us.h, REO_ACT_WALK_HOLD) let go, so the left
+// stick walks her relative to the camera block again. Writes only when it is held.
+void mc_padmap_release_walk_hold(u32 charRecord);
 // SCE bit of the button that performs an action under the current control type (0 if none).
 u32 mc_button_for_action(u32 actionBit);
 

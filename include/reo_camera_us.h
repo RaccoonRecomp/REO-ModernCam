@@ -90,6 +90,13 @@
 #define REO_CHAR_AIM_ANGLE 0xBC8  // s16 gun elevation, 65536/360 per degree, +-0x1FFF
 #define REO_CHAR_EQUIPPED  0xC7C  // u8 item-table slot of the equipped weapon, 0 = none [EQUIPPED_OFF 3196]
 #define REO_CHAR_ACT       0xF78  // action block: +0 pressed, +8 held, +0x20..+0x2F stick copy
+// u16 in the action block: the held walking direction. The left stick walks her relative to the camera block: the game
+// makes her actions (+8 of this block, low half) forward, plus turn left / right until her heading is the stick's
+// direction from the camera's view. When the room's camera cuts while the stick walks her, this becomes 1 and the
+// stick's angle is kept at +0x30 (s16); while it is 1 she walks on the way she went (forward only, no turn), so the
+// new fixed angle does not turn her, until the stick is let go. Probed in J's Bar (watches of the action block at
+// every vblank: set in the game frame after each cut change with the stick pushed, back to 0 when it is let go).
+#define REO_ACT_WALK_HOLD  0x32
 #define REO_CHAR_AI_GATE   0xFF0  // u8, 0 = player-driven
 #define REO_AIM_ANGLE_MAX  0x1FFF
 // u32, the aim target (the game's auto-aim lock): when she raises the weapon with the aim action, the aim-stance entry

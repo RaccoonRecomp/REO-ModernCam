@@ -1,6 +1,6 @@
 [manifest]
 id = "REO_ModernCam"
-version = "2.1.0"
+version = "2.1.1"
 display_name = "Resident Evil Outbreak — Modern Camera"
 description = """
 A port of Snippy's Outbreak ModernCam to the recompilation of the US release (SLUS-20765, disc version 2.00).

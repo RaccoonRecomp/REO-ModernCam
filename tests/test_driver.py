@@ -1220,6 +1220,66 @@ check(("shoulder", -50.0) in g.host.config_writes[writes:], "Swap Shoulder works
       % g.host.config_writes[writes:])
 check(not code_touched(m), "no game code read or written")
 
+print("== 30. the left stick walks her where it points from this view: the game's held walking direction (a cut of the "
+      "room's camera) is let go while it drives with Turn to Camera Off and Keep Behind Character off")
+ACT = CHAR + 0xF78
+WALK_HOLD = ACT + 0x32
+
+
+def walk_held_at_cut(m):
+    # The room's camera cut while the stick walked her up: the mapper holds her walking direction (+0x32 = 1, the
+    # stick's angle at +0x30); her partner's record holds one too.
+    m.ee_set_u32(ACT + 0x30, 0x0001FFFF)
+    m.ee_set_u32(ACT + STRIDE + 0x30, 0x0001C000)
+
+
+def hold_writes(m):
+    return [w for w in m.ee_writes if w[0] & ~3 == ACT + 0x30]
+
+
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+g.frame(5)
+check(not hold_writes(m), "nothing held: nothing written there")
+walk_held_at_cut(m)
+g.frame(1)
+check(m.ee_u16(WALK_HOLD) == 0 and m.ee_u16(ACT + 0x30) == 0xFFFF,
+      "defaults, driving: the hold let go at the pad-map mark (+0x32 = %d), the stick's angle word left as it is"
+      % m.ee_u16(WALK_HOLD))
+check(m.ee_u32(ACT + STRIDE + 0x30) == 0x0001C000, "her partner's record untouched")
+n = len(hold_writes(m))
+g.frame(5)
+check(n == 1 and len(hold_writes(m)) == n, "one write, and nothing more while nothing is held (%d)" % n)
+for key, value, what in (("rotate_mode", 1, "Keep Behind Character on"), ("turn_to_camera", 1, "Turn to Camera Moving"),
+                         ("turn_to_camera", 2, "Turn to Camera Always"), ("enabled", 0, "the camera's own switch Off")):
+    m = new_machine()
+    g = Game(m)
+    m.config[key] = value
+    g.frame(5)
+    walk_held_at_cut(m)
+    g.frame(3)
+    check(m.ee_u16(WALK_HOLD) == 1, "%s: the game's hold stays (as 2.1.0)" % what)
+m = new_machine()
+g = Game(m)
+m.config["cinematic_yield"] = 1
+g.frame(5)
+for _ in range(8):
+    m.ee_set_f32(CAM_EYE, 77777.0)
+    g.frame(1)
+walk_held_at_cut(m)
+g.frame(3)
+check(g.host.status[0] == 3 and m.ee_u16(WALK_HOLD) == 1, "handed back to a cutscene: the game's hold stays")
+m = new_machine()
+g = Game(m)
+m.log_writes = m.log_reads = True
+g.pad_map = False
+g.frame(40)
+walk_held_at_cut(m)
+g.frame(1)
+check(m.ee_u16(WALK_HOLD) == 0, "no pad-map event from the host: let go by the per-frame fallback")
+check(not code_touched(m), "no game code read or written")
+
 print("== 26. J's Bar's restroom mirrors: the room reflected at the room's draw while the camera drives there")
 ROOM = 0x0049EEF0
 OBJ_FLAGS, OBJ_COUNT, OBJ_MATRIX = 0x0049F790, 0x0049F762, 0x0049FA10
